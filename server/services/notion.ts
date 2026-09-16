@@ -120,6 +120,36 @@ export class NotionService {
     return null;
   }
 
+  /**
+   * Inspect page children if input ID is a Page ID containing a child database.
+   */
+  private async findDatabaseFromPage(pageId: string): Promise<string | null> {
+    try {
+      const formattedPageId = pageId.length === 32
+        ? `${pageId.slice(0, 8)}-${pageId.slice(8, 12)}-${pageId.slice(12, 16)}-${pageId.slice(16, 20)}-${pageId.slice(20)}`
+        : pageId;
+
+      const res = await fetch(`https://api.notion.com/v1/blocks/${formattedPageId}/children`, {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          "Notion-Version": "2022-06-28",
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const dbBlock = (data.results || []).find((b: any) => b.type === "child_database");
+        if (dbBlock) {
+          console.log(`[NOTION] Found child_database inside page: ${dbBlock.id}`);
+          return dbBlock.id.replace(/-/g, "");
+        }
+      }
+    } catch (e) {
+      console.error("[NOTION] Error finding child_database in page:", e);
+    }
+    // Fallback to workspace database search
+    return await this.searchAccessibleDatabase();
+  }
+
   private async queryDatabaseRaw(body: Record<string, any>): Promise<any> {
     let res = await fetch(
       `https://api.notion.com/v1/databases/${this.databaseId}/query`,
@@ -134,31 +164,34 @@ export class NotionService {
       }
     );
 
-    // If 404, attempt auto-discovery of databases shared with the token
-    if (!res.ok && res.status === 404) {
-      console.warn(`[NOTION] Direct query for DB ID ${this.databaseId} returned 404. Attempting auto-discovery...`);
-      const discoveredId = await this.searchAccessibleDatabase();
-      if (discoveredId && discoveredId !== this.databaseId) {
-        this.databaseId = discoveredId;
-        res = await fetch(
-          `https://api.notion.com/v1/databases/${this.databaseId}/query`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${this.token}`,
-              "Notion-Version": "2022-06-28",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(body),
-          }
-        );
+    if (!res.ok) {
+      const errText = await res.text();
+      if (res.status === 404 || res.status === 400 || errText.includes("is a page") || errText.includes("validation_error")) {
+        console.warn(`[NOTION] Direct DB query for ${this.databaseId} failed (${errText}). Finding database from page...`);
+        const realDbId = await this.findDatabaseFromPage(this.databaseId);
+        if (realDbId) {
+          this.databaseId = realDbId;
+          res = await fetch(
+            `https://api.notion.com/v1/databases/${this.databaseId}/query`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${this.token}`,
+                "Notion-Version": "2022-06-28",
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(body),
+            }
+          );
+        }
+      }
+
+      if (!res.ok) {
+        const finalErr = await res.text();
+        throw new Error(`Notion API error: ${res.status} — ${finalErr}`);
       }
     }
 
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Notion API error: ${res.status} — ${err}`);
-    }
     return res.json();
   }
 
