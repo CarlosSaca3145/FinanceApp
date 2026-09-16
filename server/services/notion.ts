@@ -90,12 +90,15 @@ export class NotionService {
     this.dateProperty = opts.dateProperty || "Date";
     this.statusProperty = opts.statusProperty || "Status";
     this.nicheProperty = opts.nicheProperty || "Niche";
+
+    console.log(`[NOTION DEBUG] Service Initialized. Token snippet: ${this.token.slice(0, 7)}... | Original DB/Page ID input: "${opts.databaseId}" -> Extracted Database ID: "${this.databaseId}"`);
   }
 
   /**
    * Search Notion workspace for databases shared with this integration token.
    */
   private async searchAccessibleDatabase(): Promise<string | null> {
+    console.log("[NOTION DEBUG] Searching accessible databases via Notion /v1/search API...");
     try {
       const res = await fetch("https://api.notion.com/v1/search", {
         method: "POST",
@@ -106,16 +109,24 @@ export class NotionService {
         },
         body: JSON.stringify({ filter: { value: "database", property: "object" } }),
       });
+      console.log(`[NOTION DEBUG] Search API status: ${res.status}`);
       if (res.ok) {
         const data = await res.json();
+        console.log(`[NOTION DEBUG] Search API found ${data.results?.length || 0} database results.`);
         if (data.results && data.results.length > 0) {
+          for (const db of data.results) {
+            console.log(`[NOTION DEBUG] Found DB: "${db.title?.[0]?.plain_text || 'Untitled'}" ID: ${db.id}`);
+          }
           const firstDb = data.results[0];
-          console.log(`[NOTION] Auto-discovered database "${firstDb.title?.[0]?.plain_text || 'Untitled'}" (${firstDb.id})`);
+          console.log(`[NOTION DEBUG] Selected auto-discovered database "${firstDb.title?.[0]?.plain_text || 'Untitled'}" (${firstDb.id})`);
           return firstDb.id.replace(/-/g, "");
         }
+      } else {
+        const errText = await res.text();
+        console.error(`[NOTION DEBUG] Search API failed with status ${res.status}: ${errText}`);
       }
     } catch (e) {
-      console.error("[NOTION] Auto-search databases error:", e);
+      console.error("[NOTION DEBUG] Auto-search databases error:", e);
     }
     return null;
   }
@@ -124,33 +135,46 @@ export class NotionService {
    * Inspect page children if input ID is a Page ID containing a child database.
    */
   private async findDatabaseFromPage(pageId: string): Promise<string | null> {
+    console.log(`[NOTION DEBUG] Attempting to find child_database inside page ID: ${pageId}`);
     try {
       const formattedPageId = pageId.length === 32
         ? `${pageId.slice(0, 8)}-${pageId.slice(8, 12)}-${pageId.slice(12, 16)}-${pageId.slice(16, 20)}-${pageId.slice(20)}`
         : pageId;
 
+      console.log(`[NOTION DEBUG] Fetching block children for: https://api.notion.com/v1/blocks/${formattedPageId}/children`);
       const res = await fetch(`https://api.notion.com/v1/blocks/${formattedPageId}/children`, {
         headers: {
           Authorization: `Bearer ${this.token}`,
           "Notion-Version": "2022-06-28",
         },
       });
+      console.log(`[NOTION DEBUG] Blocks children API status: ${res.status}`);
       if (res.ok) {
         const data = await res.json();
+        console.log(`[NOTION DEBUG] Block children count: ${data.results?.length || 0}`);
         const dbBlock = (data.results || []).find((b: any) => b.type === "child_database");
         if (dbBlock) {
-          console.log(`[NOTION] Found child_database inside page: ${dbBlock.id}`);
+          console.log(`[NOTION DEBUG] Found child_database block! ID: ${dbBlock.id}`);
           return dbBlock.id.replace(/-/g, "");
+        } else {
+          console.log("[NOTION DEBUG] No child_database block found among page children.");
         }
+      } else {
+        const errText = await res.text();
+        console.error(`[NOTION DEBUG] Blocks children API failed (${res.status}): ${errText}`);
       }
     } catch (e) {
-      console.error("[NOTION] Error finding child_database in page:", e);
+      console.error("[NOTION DEBUG] Error finding child_database in page:", e);
     }
     // Fallback to workspace database search
+    console.log("[NOTION DEBUG] Falling back to searchAccessibleDatabase()...");
     return await this.searchAccessibleDatabase();
   }
 
   private async queryDatabaseRaw(body: Record<string, any>): Promise<any> {
+    console.log(`[NOTION DEBUG] Querying database URL: https://api.notion.com/v1/databases/${this.databaseId}/query`);
+    console.log(`[NOTION DEBUG] Query payload: ${JSON.stringify(body)}`);
+
     let res = await fetch(
       `https://api.notion.com/v1/databases/${this.databaseId}/query`,
       {
@@ -164,12 +188,16 @@ export class NotionService {
       }
     );
 
+    console.log(`[NOTION DEBUG] Query response status: ${res.status}`);
+
     if (!res.ok) {
       const errText = await res.text();
+      console.error(`[NOTION DEBUG] Query failed. Status: ${res.status}, Response: ${errText}`);
       if (res.status === 404 || res.status === 400 || errText.includes("is a page") || errText.includes("validation_error")) {
-        console.warn(`[NOTION] Direct DB query for ${this.databaseId} failed (${errText}). Finding database from page...`);
+        console.warn(`[NOTION DEBUG] Direct DB query for ${this.databaseId} failed (${errText}). Finding database from page...`);
         const realDbId = await this.findDatabaseFromPage(this.databaseId);
         if (realDbId) {
+          console.log(`[NOTION DEBUG] Retrying query with resolved Database ID: ${realDbId}`);
           this.databaseId = realDbId;
           res = await fetch(
             `https://api.notion.com/v1/databases/${this.databaseId}/query`,
@@ -183,11 +211,15 @@ export class NotionService {
               body: JSON.stringify(body),
             }
           );
+          console.log(`[NOTION DEBUG] Retry query response status: ${res.status}`);
+        } else {
+          console.error("[NOTION DEBUG] Could not resolve a real Database ID from page or search.");
         }
       }
 
       if (!res.ok) {
         const finalErr = await res.text();
+        console.error(`[NOTION DEBUG] Final query attempt failed: ${finalErr}`);
         throw new Error(`Notion API error: ${res.status} — ${finalErr}`);
       }
     }
@@ -196,33 +228,24 @@ export class NotionService {
   }
 
   private async queryDatabase(startCursor?: string): Promise<any> {
-    // First try with strict filters
-    try {
-      const bodyWithFilters: Record<string, any> = {
-        sorts: [{ property: this.dateProperty, direction: "ascending" }],
-        filter: {
-          property: this.statusProperty,
-          select: { does_not_equal: "Published" },
-        },
-      };
-      if (startCursor) bodyWithFilters.start_cursor = startCursor;
-      return await this.queryDatabaseRaw(bodyWithFilters);
-    } catch (err) {
-      console.warn("[NOTION] Query with filters failed, retrying un-filtered query:", err);
-      // Fallback: Query database without custom filters/sorts
-      const fallbackBody: Record<string, any> = {};
-      if (startCursor) fallbackBody.start_cursor = startCursor;
-      return await this.queryDatabaseRaw(fallbackBody);
-    }
+    // Query without strict filters to avoid 400 validation errors on status/select property types
+    const body: Record<string, any> = {};
+    if (startCursor) body.start_cursor = startCursor;
+    return await this.queryDatabaseRaw(body);
   }
 
   /**
    * Fetches all upcoming videos from the Notion database.
+   * Only includes videos with targetDate >= today (or no set date) and non-finished status.
    */
   async getUpcomingVideos(): Promise<NotionVideoData[]> {
     const videos: NotionVideoData[] = [];
     let cursor: string | undefined;
     let hasMore = true;
+
+    // Calculate start of today (midnight) for future/upcoming filtering
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
 
     while (hasMore) {
       const data = await this.queryDatabase(cursor);
@@ -230,39 +253,58 @@ export class NotionService {
         const props: Record<string, NotionPropertyValue> = page.properties || {};
         
         // Find title property (by configured name or any 'title' type)
-        let titleProp = props[this.titleProperty] || props["Name"] || props["Nombre"] || props["Título"];
+        let titleProp = props[this.titleProperty] || props["Name"] || props["Nombre"] || props["Título"] || props["Title"] || props["Contenido"];
         if (!titleProp) {
           titleProp = Object.values(props).find(p => p.type === "title") as NotionPropertyValue;
         }
         const title = extractText(titleProp);
-        if (!title) continue;
+        if (!title || !title.trim()) continue;
 
         // Find date property
-        let dateProp = props[this.dateProperty] || props["Date"] || props["Fecha"] || props["Publicación"];
+        let dateProp = props[this.dateProperty] || props["Date"] || props["Fecha"] || props["Publicación"] || props["Target Date"];
         if (!dateProp) {
           dateProp = Object.values(props).find(p => p.type === "date") as NotionPropertyValue;
         }
+        const targetDate = extractDate(dateProp);
 
         // Find status property
-        let statusProp = props[this.statusProperty] || props["Status"] || props["Estado"] || props["Fase"];
+        let statusProp = props[this.statusProperty] || props["Status"] || props["Estado"] || props["Fase"] || props["Estado de producción"];
         if (!statusProp) {
           statusProp = Object.values(props).find(p => p.type === "status" || p.type === "select") as NotionPropertyValue;
         }
         const statusRaw = extractText(statusProp) || "Planned";
 
+        // Filter out completed / published statuses
+        const statusLower = statusRaw.toLowerCase();
+        const isFinished = ["published", "publicado", "done", "completado", "finalizado", "terminado", "archived", "archivado", "listo"].some(s => statusLower.includes(s));
+        if (isFinished) {
+          console.log(`[NOTION DEBUG] Skipping published/completed video "${title}" (status: ${statusRaw})`);
+          continue;
+        }
+
+        // Date check: Include today, future, unscheduled, and active planned videos within last 14 days
+        const fourteenDaysAgo = new Date();
+        fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+        fourteenDaysAgo.setHours(0, 0, 0, 0);
+
+        if (targetDate && targetDate < fourteenDaysAgo) {
+          console.log(`[NOTION DEBUG] Skipping old video "${title}" (date: ${targetDate.toISOString().slice(0, 10)})`);
+          continue;
+        }
+
         // Find niche property
-        let nicheProp = props[this.nicheProperty] || props["Niche"] || props["Nicho"] || props["Categoría"];
+        let nicheProp = props[this.nicheProperty] || props["Niche"] || props["Nicho"] || props["Categoría"] || props["Tema"];
         if (!nicheProp) {
           nicheProp = Object.values(props).find(p => p.type === "select" || p.type === "multi_select") as NotionPropertyValue;
         }
 
-        const sponsorshipAvailable = extractCheckbox(props["Sponsorship Available"] || props["Patrocinio Disponible"]);
+        const sponsorshipAvailable = extractCheckbox(props["Sponsorship Available"] || props["Patrocinio Disponible"] || props["Patrocinio"]);
 
         videos.push({
           notionPageId: page.id,
           title,
           nicho: extractText(nicheProp) || null,
-          targetDate: extractDate(dateProp),
+          targetDate,
           sponsorshipAvailable,
           status: statusRaw,
           notionUrl: page.url || null,
@@ -273,6 +315,7 @@ export class NotionService {
       cursor = data.next_cursor ?? undefined;
     }
 
+    console.log(`[NOTION DEBUG] Total upcoming future videos found: ${videos.length}`);
     return videos;
   }
 

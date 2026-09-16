@@ -1053,7 +1053,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const config = await storage.getIntegrationsConfig(userId);
       if (!config?.notionToken || !config?.notionDatabaseId) {
-        return res.status(400).json({ error: "Notion Token and Database ID are required. Configure them in Integrations settings." });
+        return res.status(400).json({ error: "Token e ID de Notion requeridos. Configúralos en ajustes de integraciones." });
       }
 
       const { NotionService } = await import("./services/notion");
@@ -1073,19 +1073,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         synced++;
       }
 
-      res.json({ success: true, synced, total: videos.length });
+      res.json({ success: true, synced, total: videos.length, videos });
     } catch (error: any) {
       console.error("Notion sync error:", error);
-      res.status(500).json({ error: "Notion sync failed: " + error.message });
+      res.status(500).json({ error: "Error en la sincronización con Notion: " + (error.message || "Asegúrate de agregar la integración en Notion ('...' -> 'Conexiones')") });
     }
   });
 
-  // GET synced Notion upcoming videos
+  // GET synced Notion upcoming videos (Upcoming/Future & active recent)
   app.get("/api/integrations/notion/videos", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const videos = await storage.getNotionVideos(userId);
-      res.json(videos);
+
+      const fourteenDaysAgo = new Date();
+      fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+      fourteenDaysAgo.setHours(0, 0, 0, 0);
+
+      const upcomingOnly = videos.filter(v => {
+        if (!v.targetDate) return true;
+        const d = new Date(v.targetDate);
+        return d >= fourteenDaysAgo;
+      });
+
+      res.json(upcomingOnly);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch Notion videos" });
     }

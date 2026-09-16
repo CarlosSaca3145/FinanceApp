@@ -9,11 +9,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Upload, Search, Mail, Edit, Trash2, Building, Download, RefreshCw } from "lucide-react";
+import { Plus, Upload, Search, Mail, Edit, Trash2, Building, Download, RefreshCw, Calendar } from "lucide-react";
 import { AddBrandModal } from "@/components/modals/add-brand-modal";
 import { EditBrandModal } from "@/components/modals/edit-brand-modal";
 import { EmailComposerModal } from "@/components/modals/email-composer-modal";
 import { ImportModal } from "@/components/modals/import-modal";
+import { NotionVideosModal } from "@/components/modals/notion-videos-modal";
 import { getBrands, deleteBrand, updateBrand, bulkUpdateBrands } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { exportBrandsToExcel, importCampaignsFromExcel } from "@/lib/excel-utils";
@@ -24,6 +25,7 @@ export function Brands() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showNotionModal, setShowNotionModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showCampaignImportModal, setShowCampaignImportModal] = useState(false);
   const [showAddCampaignModal, setShowAddCampaignModal] = useState(false);
@@ -394,6 +396,16 @@ export function Brands() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <Button
+              variant="outline"
+              onClick={() => setShowNotionModal(true)}
+              className="flex items-center space-x-2 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
+              data-testid="button-notion-calendar"
+            >
+              <Calendar className="h-4 w-4 text-indigo-500" />
+              <span>Calendario Notion</span>
+            </Button>
+
             <Button 
               variant="outline"
               onClick={() => syncRepliesMutation.mutate()}
@@ -967,6 +979,22 @@ export function Brands() {
           </div>
         </DialogContent>
       </Dialog>
+      {/* Notion Videos Modal */}
+      <NotionVideosModal 
+        open={showNotionModal} 
+        onOpenChange={setShowNotionModal} 
+        onSelectVideoForBrand={(video) => {
+          // If a brand is selected, open email modal for it
+          if (selectedBrand) {
+            setShowEmailModal(true);
+          } else {
+            toast({
+              title: `🎬 Vídeo seleccionado: "${video.title}"`,
+              description: "Selecciona una marca para enviarle la propuesta.",
+            });
+          }
+        }}
+      />
     </div>
   );
 }

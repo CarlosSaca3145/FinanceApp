@@ -112,6 +112,10 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
       toast({ title: "✅ Configuración guardada", description: "Las credenciales se han guardado correctamente." });
       setYoutubeApiKey("");
       setNotionToken("");
+      // Trigger Notion sync if configured
+      if (notionDatabaseId || config?.hasNotion) {
+        notionSyncMutation.mutate();
+      }
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.message || "No se pudo guardar la configuración", variant: "destructive" });
@@ -141,7 +145,7 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/integrations/notion/videos"] });
-      toast({ title: "📅 Notion Sincronizado", description: `${data.synced} vídeos próximos sincronizados.` });
+      toast({ title: "📅 Notion Sincronizado", description: `${data.synced} próximos vídeos sincronizados correctamente.` });
     },
     onError: (err: any) => {
       toast({ title: "Error Notion", description: err.message || "No se pudo sincronizar Notion", variant: "destructive" });
@@ -192,45 +196,41 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
               </div>
             </div>
             <div className="p-4 space-y-3">
-              <div className="grid grid-cols-1 gap-3">
-                <div>
-                  <Label htmlFor="youtube-api-key" className="text-sm font-medium">
-                    YouTube Data API Key
-                    <a
-                      href="https://console.cloud.google.com/apis/credentials"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ml-2 text-xs text-primary hover:underline inline-flex items-center gap-0.5"
-                    >
-                      Obtener <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </Label>
-                  <Input
-                    id="youtube-api-key"
-                    type="password"
-                    placeholder={hasYoutube ? "••••••••••  (guardada)" : "AIza..."}
-                    value={youtubeApiKey}
-                    onChange={e => setYoutubeApiKey(e.target.value)}
-                    className="mt-1 font-mono text-sm"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="youtube-channel-id" className="text-sm font-medium">
-                    Channel ID
-                    <span className="ml-2 text-xs text-muted-foreground">(ej. UCxxxxxxxxxxxxxx)</span>
-                  </Label>
-                  <Input
-                    id="youtube-channel-id"
-                    placeholder="UCxxxxxxxxxxxxxx"
-                    value={youtubeChannelId}
-                    onChange={e => setYoutubeChannelId(e.target.value)}
-                    className="mt-1 font-mono text-sm"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Encuéntralo en YouTube Studio → Configuración del canal → Información del canal
-                  </p>
-                </div>
+              <div>
+                <Label htmlFor="yt-key" className="text-sm font-medium">
+                  YouTube API Key
+                  <a
+                    href="https://console.cloud.google.com/apis/credentials"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-2 text-xs text-primary hover:underline inline-flex items-center gap-0.5"
+                  >
+                    Google Cloud Console <ExternalLink className="h-3 w-3" />
+                  </a>
+                </Label>
+                <Input
+                  id="yt-key"
+                  type="password"
+                  value={youtubeApiKey}
+                  onChange={(e) => setYoutubeApiKey(e.target.value)}
+                  placeholder={config?.youtubeApiKey ? "•••••••••• (guardada)" : "AIzaSy..."}
+                  className="mt-1 font-mono text-sm"
+                />
               </div>
+
+              <div>
+                <Label htmlFor="yt-channel-id" className="text-sm font-medium">
+                  ID del Canal de YouTube
+                </Label>
+                <Input
+                  id="yt-channel-id"
+                  value={youtubeChannelId}
+                  onChange={(e) => setYoutubeChannelId(e.target.value)}
+                  placeholder="UC..."
+                  className="mt-1 font-mono text-sm"
+                />
+              </div>
+
               <div className="flex gap-2 pt-1">
                 <Button
                   size="sm"
@@ -250,18 +250,18 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
                     className="gap-2"
                   >
                     <RefreshCw className={`h-4 w-4 ${ytSyncMutation.isPending ? "animate-spin" : ""}`} />
-                    {ytSyncMutation.isPending ? "Sincronizando..." : "Sincronizar Ahora"}
+                    {ytSyncMutation.isPending ? "Sincronizando..." : "Sincronizar"}
                   </Button>
                 )}
               </div>
             </div>
           </div>
 
-          {/* ─── Notion Section ──────────────────────────────────────── */}
+          {/* ─── Notion Section ───────────────────────────────────────── */}
           <div className="border border-border rounded-xl overflow-hidden">
-            <div className="bg-gray-500/5 border-b border-border px-4 py-3 flex items-center justify-between">
+            <div className="bg-slate-500/5 border-b border-border px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-foreground" />
+                <Calendar className="h-5 w-5 text-indigo-500" />
                 <span className="font-semibold text-foreground">Notion — Calendario de Contenidos</span>
               </div>
               <div className="flex items-center gap-2">
@@ -298,48 +298,53 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
                 <Input
                   id="notion-token"
                   type="password"
-                  placeholder={hasNotion ? "••••••••••  (guardado)" : "secret_..."}
                   value={notionToken}
-                  onChange={e => setNotionToken(e.target.value)}
+                  onChange={(e) => setNotionToken(e.target.value)}
+                  placeholder={config?.notionToken ? "•••••••••• (guardado)" : "secret_..."}
                   className="mt-1 font-mono text-sm"
                 />
               </div>
+
               <div>
                 <Label htmlFor="notion-db-id" className="text-sm font-medium">
-                  Database ID
-                  <span className="ml-2 text-xs text-muted-foreground">(ID de la base de datos de tu calendario)</span>
+                  ID o URL de la Base de Datos / Página
                 </Label>
                 <Input
                   id="notion-db-id"
-                  placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                   value={notionDatabaseId}
-                  onChange={e => setNotionDatabaseId(e.target.value)}
+                  onChange={(e) => setNotionDatabaseId(e.target.value)}
+                  placeholder="https://notion.so/... o 32 caracteres hexadecimales"
                   className="mt-1 font-mono text-sm"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Copia el ID desde la URL de tu base de datos de Notion: notion.so/.../<strong>ID_AQUÍ</strong>?v=...
+                  Copia el enlace completo de tu base de datos o página de Notion.
                 </p>
               </div>
 
-              {/* Advanced / property mapping */}
-              <button
-                type="button"
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                onClick={() => setShowAdvancedNotion(!showAdvancedNotion)}
-              >
-                {showAdvancedNotion ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                Configuración avanzada de propiedades
-              </button>
+              {hasNotion && (
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground p-0 h-auto font-normal flex items-center gap-1 hover:text-foreground"
+                    onClick={() => setShowAdvancedNotion(!showAdvancedNotion)}
+                  >
+                    {showAdvancedNotion ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    {showAdvancedNotion ? "Ocultar configuración de columnas" : "Mapeo de nombres de columnas (Opcional)"}
+                  </Button>
+                </div>
+              )}
 
               {showAdvancedNotion && (
-                <div className="grid grid-cols-2 gap-3 pt-1 border-t border-border">
+                <div className="grid grid-cols-2 gap-3 pt-1 p-3 bg-muted/30 rounded-lg border border-border/50 text-xs">
                   <div>
                     <Label className="text-xs text-muted-foreground">Propiedad Título</Label>
                     <Input
                       value={notionTitleProperty}
                       onChange={e => setNotionTitleProperty(e.target.value)}
                       className="mt-1 text-sm"
-                      placeholder="Name"
+                      placeholder="Name / Nombre / Título"
                     />
                   </div>
                   <div>
@@ -348,7 +353,7 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
                       value={notionDateProperty}
                       onChange={e => setNotionDateProperty(e.target.value)}
                       className="mt-1 text-sm"
-                      placeholder="Date"
+                      placeholder="Date / Fecha"
                     />
                   </div>
                   <div>
@@ -357,7 +362,7 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
                       value={notionStatusProperty}
                       onChange={e => setNotionStatusProperty(e.target.value)}
                       className="mt-1 text-sm"
-                      placeholder="Status"
+                      placeholder="Status / Estado"
                     />
                   </div>
                   <div>
@@ -366,7 +371,7 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
                       value={notionNicheProperty}
                       onChange={e => setNotionNicheProperty(e.target.value)}
                       className="mt-1 text-sm"
-                      placeholder="Niche"
+                      placeholder="Niche / Nicho"
                     />
                   </div>
                 </div>
@@ -395,6 +400,46 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
                   </Button>
                 )}
               </div>
+
+              {/* ─── Synced Upcoming Videos List Preview ───────────────── */}
+              {hasNotion && (
+                <div className="mt-4 pt-3 border-t border-border">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-indigo-500" /> Próximos Vídeos Sincronizados (Futuros)
+                    </span>
+                    <span className="text-xs text-muted-foreground font-medium">
+                      {(notionVideos as any[]).length} vídeos
+                    </span>
+                  </div>
+
+                  {(notionVideos as any[]).length === 0 ? (
+                    <div className="bg-muted/40 rounded-lg p-3 text-center text-xs text-muted-foreground">
+                      No hay vídeos futuros programados cargados. Haz clic en <strong>"Sincronizar Ahora"</strong> para cargar tu calendario.
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                      {(notionVideos as any[]).map((vid: any, i: number) => {
+                        const dateStr = vid.targetDate ? new Date(vid.targetDate).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" }) : "Sin fecha";
+                        return (
+                          <div key={vid.id || i} className="flex items-center justify-between bg-card p-2 rounded border border-border text-xs gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-foreground truncate">{vid.title}</p>
+                              <div className="flex items-center gap-2 mt-0.5 text-muted-foreground">
+                                <span>📅 {dateStr}</span>
+                                {vid.nicho && <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-[10px]">{vid.nicho}</span>}
+                              </div>
+                            </div>
+                            <Badge variant="outline" className="text-[10px] capitalize shrink-0">
+                              {vid.status || "Planificado"}
+                            </Badge>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
