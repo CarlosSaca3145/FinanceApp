@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { BarChart3, Building, FileText, PlaneTakeoff, Menu, X, LogOut } from "lucide-react";
+import { BarChart3, Building, FileText, PlaneTakeoff, Menu, X, LogOut, Zap } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { IntegrationsSettingsModal } from "@/components/modals/integrations-settings-modal";
 
 interface ResponsiveLayoutProps {
   activeTab: string;
@@ -18,6 +19,7 @@ const navigation = [
 
 export function ResponsiveLayout({ activeTab, children }: ResponsiveLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showIntegrations, setShowIntegrations] = useState(false);
   const { user } = useAuth();
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
@@ -80,6 +82,19 @@ export function ResponsiveLayout({ activeTab, children }: ResponsiveLayoutProps)
               );
             })}
           </ul>
+
+          {/* ─── Integrations Button ─── */}
+          <div className="mt-6 pt-4 border-t border-border">
+            <p className="text-xs text-muted-foreground font-medium px-3 mb-2 uppercase tracking-wider">Integraciones</p>
+            <button
+              onClick={() => setShowIntegrations(true)}
+              className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              data-testid="nav-integrations"
+            >
+              <Zap className="h-4 w-4 text-yellow-500" />
+              <span>YouTube & Notion</span>
+            </button>
+          </div>
         </nav>
         
         <div className="p-4 border-t border-border flex flex-col gap-2">
@@ -221,6 +236,11 @@ export function ResponsiveLayout({ activeTab, children }: ResponsiveLayoutProps)
           {children}
         </main>
       </div>
+
+      <IntegrationsSettingsModal
+        open={showIntegrations}
+        onOpenChange={setShowIntegrations}
+      />
     </div>
   );
 }
