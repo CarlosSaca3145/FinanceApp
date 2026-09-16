@@ -84,9 +84,17 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
   // Save config mutation
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const extractDatabaseId = (raw: string) => {
+        if (!raw) return "";
+        const cleaned = raw.trim();
+        const match = cleaned.match(/([a-f0-9]{32})/i) || cleaned.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+        if (match) return match[1].replace(/-/g, "");
+        return cleaned.replace(/-/g, "");
+      };
+
       const payload: Record<string, string> = {
         youtubeChannelId,
-        notionDatabaseId,
+        notionDatabaseId: extractDatabaseId(notionDatabaseId),
         notionTitleProperty,
         notionDateProperty,
         notionStatusProperty,

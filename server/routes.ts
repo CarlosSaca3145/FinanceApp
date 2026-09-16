@@ -963,7 +963,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/integrations/config", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const config = await storage.upsertIntegrationsConfig(userId, req.body);
+      const { extractNotionDatabaseId } = await import("./services/notion");
+      const body = { ...req.body };
+      if (body.notionDatabaseId) {
+        body.notionDatabaseId = extractNotionDatabaseId(body.notionDatabaseId);
+      }
+      const config = await storage.upsertIntegrationsConfig(userId, body);
       res.json({ success: true, hasYoutube: !!(config.youtubeApiKey && config.youtubeChannelId), hasNotion: !!(config.notionToken && config.notionDatabaseId) });
     } catch (error) {
       res.status(500).json({ error: "Failed to save integrations config" });

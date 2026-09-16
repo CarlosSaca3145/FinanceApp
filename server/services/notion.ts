@@ -51,6 +51,21 @@ function extractCheckbox(prop: NotionPropertyValue | undefined): boolean {
   return prop.checkbox ?? true;
 }
 
+export function extractNotionDatabaseId(rawInput: string): string {
+  if (!rawInput) return "";
+  let cleaned = rawInput.trim();
+  
+  // Extract 32-character hex ID or UUID from Notion URL (e.g. .../Contenido-bffeb1a4b57441229de1d...)
+  const hexMatch = cleaned.match(/([a-f0-9]{32})/i) || 
+                   cleaned.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+                   
+  if (hexMatch) {
+    return hexMatch[1].replace(/-/g, "");
+  }
+  
+  return cleaned.replace(/-/g, "");
+}
+
 export class NotionService {
   private token: string;
   private databaseId: string;
@@ -68,7 +83,7 @@ export class NotionService {
     nicheProperty?: string;
   }) {
     this.token = opts.token;
-    this.databaseId = opts.databaseId;
+    this.databaseId = extractNotionDatabaseId(opts.databaseId);
     this.titleProperty = opts.titleProperty || "Name";
     this.dateProperty = opts.dateProperty || "Date";
     this.statusProperty = opts.statusProperty || "Status";
