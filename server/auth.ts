@@ -15,7 +15,7 @@ export function getSession() {
     tableName: "sessions",
   });
   return session({
-    secret: process.env.SESSION_SECRET!,
+    secret: process.env.SESSION_SECRET || "patrocinios_default_session_secret_key_2026",
     store: sessionStore,
     resave: true,
     saveUninitialized: true,
