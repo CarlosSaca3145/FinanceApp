@@ -235,31 +235,34 @@ export function Dashboard() {
         {/* ─── Notion Upcoming Videos Banner Card ──────────────────────────────── */}
         <Card className="border border-indigo-500/20 bg-gradient-to-r from-indigo-500/5 via-purple-500/5 to-transparent">
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500">
+                <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500 shrink-0">
                   <Calendar className="h-5 w-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-base font-bold flex items-center gap-2">
-                    📅 Calendario de Notion — Próximos Vídeos a Vender
-                    <Badge className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900">
-                      {notionVideos.length} Disponibles
+                  <CardTitle className="text-base font-bold flex items-center flex-wrap gap-2">
+                    📅 Calendario de Notion — Pipeline de Patrocinios
+                    <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs">
+                      🟢 {notionVideos.filter(v => !v.isSold && v.sponsorshipAvailable !== false && !/vendido|patrocinado|sold|sponsored/i.test(v.status || "")).length} Disponibles para Vender
+                    </Badge>
+                    <Badge className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 text-xs">
+                      🤝 {notionVideos.filter(v => v.isSold || v.sponsorshipAvailable === false || /vendido|patrocinado|sold|sponsored/i.test(v.status || "")).length} Vendidos
                     </Badge>
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Selecciona un vídeo específico de tu calendario para ofrecérselo a marcas patrocinadoras.
+                    Gestiona tus vídeos en planificación: ofrece los disponibles a marcas o haz seguimiento de los ya vendidos.
                   </p>
                 </div>
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5 border-indigo-200 text-indigo-600 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400 dark:hover:bg-indigo-950/40 text-xs font-semibold"
+                className="gap-1.5 border-indigo-200 text-indigo-600 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400 dark:hover:bg-indigo-950/40 text-xs font-semibold shrink-0"
                 onClick={() => setShowNotionModal(true)}
               >
                 <Sparkles className="h-3.5 w-3.5" />
-                Explorar los {notionVideos.length} Vídeos
+                Explorar Vídeos ({notionVideos.length})
               </Button>
             </div>
           </CardHeader>
@@ -267,18 +270,20 @@ export function Dashboard() {
           <CardContent>
             {notionVideos.length === 0 ? (
               <div className="text-center py-6 text-xs text-muted-foreground bg-card/60 rounded-lg border border-dashed">
-                <p>No hay vídeos cargados aún. Abre Ajustes de Integraciones y pulsa <strong>"Sincronizar Ahora"</strong>.</p>
+                <p>No hay vídeos en planificación aún. Abre Ajustes de Integraciones y pulsa <strong>"Sincronizar Ahora"</strong>.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {notionVideos.slice(0, 4).map((vid: any, i: number) => {
                   const dateStr = vid.targetDate ? new Date(vid.targetDate).toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : "Sin fecha";
+                  const isSold = vid.isSold || vid.sponsorshipAvailable === false || /vendido|patrocinado|sold|sponsored/i.test(vid.status || "");
+
                   return (
-                    <div key={vid.id || i} className="bg-card p-3 rounded-lg border border-border flex flex-col justify-between space-y-2 hover:border-indigo-500/40 transition-colors shadow-2xs">
+                    <div key={vid.id || i} className={`bg-card p-3 rounded-lg border flex flex-col justify-between space-y-2 transition-colors shadow-2xs ${isSold ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border hover:border-indigo-500/40'}`}>
                       <div>
                         <div className="flex items-center justify-between text-[10px] mb-1">
-                          <Badge variant="outline" className="capitalize text-[10px] py-0">
-                            {vid.status || "Planificado"}
+                          <Badge variant="outline" className={`capitalize text-[10px] py-0 ${isSold ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : ''}`}>
+                            {isSold ? "🤝 Vendido" : (vid.status || "Planificado")}
                           </Badge>
                           {vid.nicho && <span className="bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded font-medium">{vid.nicho}</span>}
                         </div>
@@ -289,17 +294,21 @@ export function Dashboard() {
                         <span className="text-muted-foreground flex items-center gap-1">
                           <Calendar className="h-3 w-3 text-indigo-500" /> {dateStr}
                         </span>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 text-[11px] px-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
-                          onClick={() => {
-                            sessionStorage.setItem("selectedNotionVideo", JSON.stringify(vid));
-                            setLocation("/brands");
-                          }}
-                        >
-                          <Send className="h-3 w-3 mr-1" /> Ofrecer
-                        </Button>
+                        {isSold ? (
+                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">🤝 VENDIDO</span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-[11px] px-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                            onClick={() => {
+                              sessionStorage.setItem("selectedNotionVideo", JSON.stringify(vid));
+                              setLocation("/brands");
+                            }}
+                          >
+                            <Send className="h-3 w-3 mr-1" /> Ofrecer
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );

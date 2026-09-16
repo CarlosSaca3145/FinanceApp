@@ -12,6 +12,7 @@ export interface NotionVideoData {
   sponsorshipAvailable: boolean;
   status: string;
   notionUrl: string | null;
+  isSold?: boolean;
 }
 
 type NotionPropertyValue = {
@@ -274,16 +275,17 @@ export class NotionService {
         }
         const statusRaw = extractText(statusProp) || "Planned";
 
-        // Filter out completed / published statuses
+        // Filter out completed / published / por publicar statuses
         const statusLower = statusRaw.toLowerCase();
-        const isFinished = [
-          "published", "publicado", "done", "completado", "finalizado", 
-          "terminado", "archived", "archivado", "listo", "posted", 
-          "subido", "youtube", "grabado", "editado", "released"
+        const isExcluded = [
+          "published", "publicado", "por publicar", "por subir", "a publicar", 
+          "listo para publicar", "ready to publish", "done", "completado", 
+          "finalizado", "terminado", "archived", "archivado", "listo", 
+          "posted", "subido", "youtube", "grabado", "editado", "released"
         ].some(s => statusLower.includes(s));
 
-        if (isFinished) {
-          console.log(`[NOTION DEBUG] Skipping published/completed video "${title}" (status: ${statusRaw})`);
+        if (isExcluded) {
+          console.log(`[NOTION DEBUG] Skipping published/ready-to-publish video "${title}" (status: ${statusRaw})`);
           continue;
         }
 
@@ -299,16 +301,20 @@ export class NotionService {
           nicheProp = Object.values(props).find(p => p.type === "select" || p.type === "multi_select") as NotionPropertyValue;
         }
 
-        const sponsorshipAvailable = extractCheckbox(props["Sponsorship Available"] || props["Patrocinio Disponible"] || props["Patrocinio"]);
+        const rawSponsorship = extractCheckbox(props["Sponsorship Available"] || props["Patrocinio Disponible"] || props["Patrocinio"]);
+        const isSold = [
+          "vendido", "sold", "patrocinado", "sponsored", "cerrado", "asignado"
+        ].some(s => statusLower.includes(s)) || !rawSponsorship;
 
         videos.push({
           notionPageId: page.id,
           title,
           nicho: extractText(nicheProp) || null,
           targetDate,
-          sponsorshipAvailable,
+          sponsorshipAvailable: !isSold,
           status: statusRaw,
           notionUrl: page.url || null,
+          isSold,
         });
       }
 

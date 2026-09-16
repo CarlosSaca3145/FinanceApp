@@ -1090,17 +1090,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const startOfToday = new Date();
       startOfToday.setHours(0, 0, 0, 0);
 
-      const finishedStatuses = [
-        "published", "publicado", "done", "completado", "finalizado", 
-        "terminado", "archived", "archivado", "listo", "posted", 
-        "subido", "youtube", "grabado", "editado", "released"
+      const excludedStatuses = [
+        "published", "publicado", "por publicar", "por subir", "a publicar", 
+        "listo para publicar", "ready to publish", "done", "completado", 
+        "finalizado", "terminado", "archived", "archivado", "listo", 
+        "posted", "subido", "youtube", "grabado", "editado", "released"
       ];
 
       const upcomingOnly = videos.filter(v => {
-        // 1. Exclude any finished / published status
+        // 1. Exclude any finished / published / por publicar status
         const statusLower = (v.status || "").toLowerCase();
-        const isFinished = finishedStatuses.some(s => statusLower.includes(s));
-        if (isFinished) return false;
+        const isExcluded = excludedStatuses.some(s => statusLower.includes(s));
+        if (isExcluded) return false;
 
         // 2. Exclude past target dates
         if (v.targetDate) {
@@ -1164,11 +1165,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (notionVideoId) {
         const v = await storage.getNotionVideo(userId, notionVideoId);
-        if (v) upcomingVideo = { notionPageId: v.notionPageId, title: v.title, nicho: v.nicho, targetDate: v.targetDate, sponsorshipAvailable: v.sponsorshipAvailable ?? true, status: v.status ?? 'Planned', notionUrl: v.notionUrl };
+        if (v) upcomingVideo = { title: v.title, targetDate: v.targetDate, notionUrl: v.notionUrl };
       } else {
         const allNotionDb = await storage.getNotionVideos(userId);
         const notionVideos = allNotionDb.map(v => ({ ...v, sponsorshipAvailable: v.sponsorshipAvailable ?? true, status: v.status ?? 'Planned' }));
-        upcomingVideo = NotionService.findBestUpcomingForNiche(notionVideos, brandNiche);
+        const match = NotionService.findBestUpcomingForNiche(notionVideos, brandNiche);
+        if (match) upcomingVideo = { title: match.title, targetDate: match.targetDate, notionUrl: match.notionUrl };
       }
 
       const pitch = await OpenAIService.generateSponsorshipPitch({
