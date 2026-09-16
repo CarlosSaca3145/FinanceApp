@@ -34,15 +34,23 @@ export class ErrorBoundary extends Component<Props, State> {
               <AlertTriangle className="h-6 w-6" />
             </div>
             <h2 className="text-xl font-bold text-slate-100">Ha ocurrido un error en la aplicación</h2>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm font-semibold text-red-400 bg-red-950/40 p-2.5 rounded-lg border border-red-900/50 break-words">
               {this.state.error?.message || "Ocurrió un error inesperado al cargar esta página."}
             </p>
-            <div className="pt-2 flex justify-center gap-3">
+            {this.state.error?.stack && (
+              <details className="text-left bg-slate-950 p-2.5 rounded text-[11px] font-mono text-slate-400 max-h-32 overflow-auto">
+                <summary className="cursor-pointer text-slate-300 font-sans font-medium mb-1">Ver detalles del error</summary>
+                <pre className="whitespace-pre-wrap break-all">{this.state.error.stack}</pre>
+              </details>
+            )}
+            <div className="pt-2 flex flex-col sm:flex-row justify-center gap-3">
               <Button
-                onClick={() => window.location.reload()}
-                className="bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-2"
+                onClick={() => {
+                  window.location.href = window.location.origin + window.location.pathname + "?reload=" + Date.now();
+                }}
+                className="bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center gap-2"
               >
-                <RefreshCw className="h-4 w-4" /> Recargar Página
+                <RefreshCw className="h-4 w-4" /> Forzar Recarga (Limpiar Caché)
               </Button>
             </div>
           </div>
