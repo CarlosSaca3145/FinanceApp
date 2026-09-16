@@ -276,19 +276,20 @@ export class NotionService {
 
         // Filter out completed / published statuses
         const statusLower = statusRaw.toLowerCase();
-        const isFinished = ["published", "publicado", "done", "completado", "finalizado", "terminado", "archived", "archivado", "listo"].some(s => statusLower.includes(s));
+        const isFinished = [
+          "published", "publicado", "done", "completado", "finalizado", 
+          "terminado", "archived", "archivado", "listo", "posted", 
+          "subido", "youtube", "grabado", "editado", "released"
+        ].some(s => statusLower.includes(s));
+
         if (isFinished) {
           console.log(`[NOTION DEBUG] Skipping published/completed video "${title}" (status: ${statusRaw})`);
           continue;
         }
 
-        // Date check: Include today, future, unscheduled, and active planned videos within last 14 days
-        const fourteenDaysAgo = new Date();
-        fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-        fourteenDaysAgo.setHours(0, 0, 0, 0);
-
-        if (targetDate && targetDate < fourteenDaysAgo) {
-          console.log(`[NOTION DEBUG] Skipping old video "${title}" (date: ${targetDate.toISOString().slice(0, 10)})`);
+        // Strict future date check: Skip any video whose targetDate is in the past (before start of today)
+        if (targetDate && targetDate < startOfToday) {
+          console.log(`[NOTION DEBUG] Skipping past video "${title}" (date: ${targetDate.toISOString().slice(0, 10)})`);
           continue;
         }
 

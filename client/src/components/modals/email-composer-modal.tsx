@@ -173,95 +173,73 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
   const generatePreview = () => {
     if (!brand) return "";
 
-    // Get video link and views from content template
+    // Find selected or best matching Notion video
+    let notionVid: any = null;
+    if (selectedNotionVideoId && selectedNotionVideoId !== "auto") {
+      notionVid = notionVideos.find((v: any) => v.notionPageId === selectedNotionVideoId || v.id === selectedNotionVideoId);
+    } else if (notionVideos.length > 0) {
+      const brandNicheLower = (brand.nicho || "").toLowerCase();
+      notionVid = notionVideos.find((v: any) => 
+        (v.nicho && v.nicho.toLowerCase().includes(brandNicheLower)) ||
+        v.title.toLowerCase().includes(brandNicheLower)
+      ) || notionVideos[0];
+    }
+
+    // Get video link and views from content template fallback
     const contentTemplate = contentTemplates.find(
       (t: any) => t.nicho.toLowerCase() === brand.nicho.toLowerCase()
     );
     
     const videoLink = selectedVideoLink && selectedVideoLink !== "none" ? selectedVideoLink : (contentTemplate?.videoLinks?.[0] || "");
-    const views = contentTemplate?.views || "";
     
-    // Extract content ideas from template
-    let firstIdea = "";
-    let secondIdea = "";
-    
-    // Get the title for the selected video link (this becomes the firstIdea)
-    if (videoLink && videoLink !== "none" && contentTemplate) {
-      // Find the index of the selected video link
-      const videoIndex = contentTemplate.videoLinks?.findIndex((link: string) => link === videoLink);
-      if (videoIndex !== undefined && videoIndex >= 0) {
-        // Use the corresponding video title
-        if (contentTemplate.videoTitles && contentTemplate.videoTitles[videoIndex]) {
-          firstIdea = contentTemplate.videoTitles[videoIndex];
-        } else {
-          // Fallback to a default title format
-          firstIdea = `${brand.nicho} Review - Product Demonstration`;
-        }
-      }
-    }
-    
-    // Set the secondIdea based on user selection or extract from template
-    if (customNicheIdea) {
-      secondIdea = customNicheIdea;
-    } else if (selectedNicheIdea) {
-      secondIdea = selectedNicheIdea;
-    } else if (contentTemplate?.idea) {
-      const ideaText = contentTemplate.idea;
-      
-      // Second idea: look for text after "I propose the following content idea:"
-      const secondIdeaMatch = ideaText.match(/I propose the following content idea:\s*["""']\s*([^"""']+?)\s*["""']/);
-      if (secondIdeaMatch) {
-        secondIdea = secondIdeaMatch[1].trim();
-      } else if (!ideaText.includes("I want to show you how we have integrated")) {
-        // If it's a simple idea (not the full template format), use it directly
-        const lines = ideaText.split('\n').filter(line => line.trim());
-        const firstLine = lines[0]?.replace(/^•\s*/, '').trim();
-        if (firstLine && firstLine.length > 3 && firstLine.length < 150) {
-          secondIdea = firstLine;
-        }
-      }
-    }
-    
-    // Get video views info for the selected video link
     const videoViews = (() => {
       if (!videoLink || videoLink === "none") return "";
-      
       const template = contentTemplates.find(
         (t: any) => t.nicho.toLowerCase() === brand.nicho.toLowerCase()
       );
-      
       if (!template?.videoLinks) return "";
-      
       const videoIndex = template.videoLinks.findIndex((link: string) => link === videoLink);
       if (videoIndex >= 0 && template.videoViews && template.videoViews[videoIndex]) {
         return template.videoViews[videoIndex];
       }
-      
-      // Fallback to general views if specific video views not found
       return template.views || "";
     })();
 
+    // Build Notion Video proposal section
+    let notionVideoSection = "";
+    if (notionVid) {
+      const dateStr = notionVid.targetDate 
+        ? new Date(notionVid.targetDate).toLocaleDateString("es-ES", { day: "numeric", month: "long" }) 
+        : "próximamente";
+
+      notionVideoSection = `<p>Actualmente tenemos planificado en nuestro calendario de contenidos el próximo vídeo titulado <strong>"${notionVid.title}"</strong> (con fecha estimada de publicación para el <strong>${dateStr}</strong>). Creemos que <strong>${brand.marca}</strong> encajaría perfectamente como patrocinador oficial dentro de este contenido.</p>`;
+    } else if (customNicheIdea || selectedNicheIdea) {
+      const ideaStr = customNicheIdea || selectedNicheIdea;
+      notionVideoSection = `<p>Para lograr un excelente impacto con vuestro producto, os proponemos la siguiente idea de integración de contenido: <strong>"${ideaStr}"</strong>.</p>`;
+    }
+
     if (templateType === "followup") {
+      const videoDetail = notionVid ? ` para el vídeo "${notionVid.title}"` : "";
       return `
-        <p>Hi ${brand.contacto || 'team'},</p>
-        <p>I'm Carlos Saca from Saca Tech (@saca.technology). We publish engaging content across Instagram, TikTok, and YouTube.</p>
-        <p>I wanted to follow up on my previous email regarding our collaboration opportunity. We're still very interested in working with your brand and showcasing your products to our engaged audience.</p>
-        <p>Would you be available for a quick call this week to discuss the partnership?</p>
-        <p>I look forward to discussing this collaboration further with you.</p>
-        <p>Best regards,<br><strong>Carlos Saca</strong><br>Saca Tech<br>@saca.technology</p>
+        <p>Hola equipo de ${brand.marca},</p>
+        <p>Soy Carlos Saca de Saca Tech (@saca.technology).</p>
+        <p>Quería hacer un seguimiento de nuestro mensaje anterior referente a la oportunidad de colaboración${videoDetail}. Seguimos muy interesados en mostrar vuestros productos a nuestra audiencia.</p>
+        <p>¿Tendríais disponibilidad para una breve llamada o intercambio de correos esta semana para concretar los detalles?</p>
+        <p>Quedo a vuestra disposición.</p>
+        <p>Un cordial saludo,<br><strong>Carlos Saca</strong><br>Saca Tech<br>@saca.technology</p>
       `;
     }
 
     return `
-      <p>Hi ${brand.contacto || 'team'},</p>
-      <p>I'm Carlos Saca from Saca Tech (@saca.technology). We publish engaging content across Instagram, TikTok, and YouTube.</p>
+      <p>Hola equipo de ${brand.marca},</p>
+      <p>Soy Carlos Saca de Saca Tech (@saca.technology). Publicamos contenido sobre tecnología e innovación en Instagram, TikTok y YouTube.</p>
       ${brand.campania && brand.campania.toLowerCase() !== "general" ? 
-        `<p>Regarding the campaign: <strong>${brand.campania}</strong>, we would love to collaborate with you during this period.</p>` : ''}
-      <p>We collaborate with multiple brands across various niches (drones, microphones, robot vacuums, smartphones, smart home devices, projectors, headphones, and gaming accessories), achieving great reach and impact.</p>
-      ${videoLink && (firstIdea || secondIdea) ? 
-        `<p>I want to show you how we have integrated content with the idea of "${firstIdea}" according to the link: <a href="${videoLink}" target="_blank">${videoLink}</a>${videoViews ? ` with ${videoViews}` : ''}. In order to achieve good reach with your product, I propose the following content idea: "${secondIdea}". It is just one of the many ideas we could discuss together.</p>` : ''}
-      <p>I look forward to discussing this collaboration further with you.</p>
-      <p>Best regards,<br><strong>Carlos Saca</strong><br>Saca Tech<br>@saca.technology</p>
+        `<p>En relación a la campaña: <strong>${brand.campania}</strong>, nos encantaría colaborar con vosotros durante este periodo.</p>` : ''}
+      <p>Colaboramos con marcas destacadas en el sector, consiguiendo gran alcance y engagement con nuestra audiencia.</p>
+      ${notionVideoSection}
+      ${videoLink ? `<p>Podéis ver un ejemplo de nuestro formato e integración de contenidos en este vídeo previo: <a href="${videoLink}" target="_blank">${videoLink}</a>${videoViews ? ` (${videoViews})` : ''}.</p>` : ''}
+      <p>Quedo a vuestra disposición para comentar los detalles de esta colaboración.</p>
+      <p>Un cordial saludo,<br><strong>Carlos Saca</strong><br>Saca Tech<br>@saca.technology</p>
     `;
   };
 
