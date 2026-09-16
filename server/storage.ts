@@ -74,6 +74,7 @@ export interface IStorage {
   getNotionVideos(userId: string): Promise<NotionUpcomingVideo[]>;
   getNotionVideo(userId: string, id: string): Promise<NotionUpcomingVideo | undefined>;
   upsertNotionVideo(userId: string, video: NotionVideoData): Promise<NotionUpcomingVideo>;
+  clearNotionVideos(userId: string): Promise<void>;
 
   // Integrations Config
   getIntegrationsConfig(userId: string): Promise<IntegrationsConfig | undefined>;
@@ -386,7 +387,8 @@ export class MemStorage implements IStorage {
   async upsertYoutubeVideo(_userId: string, _video: YouTubeVideoData): Promise<YoutubeVideo> { throw new Error("Not implemented in MemStorage"); }
   async getNotionVideos(_userId: string): Promise<NotionUpcomingVideo[]> { return []; }
   async getNotionVideo(_userId: string, _id: string): Promise<NotionUpcomingVideo | undefined> { return undefined; }
-  async upsertNotionVideo(_userId: string, _video: NotionVideoData): Promise<NotionUpcomingVideo> { throw new Error("Not implemented in MemStorage"); }
+  async upsertNotionVideo(_userId: string, _video: NotionVideoData): Promise<NotionUpcomingVideo> { return {} as NotionUpcomingVideo; }
+  async clearNotionVideos(_userId: string): Promise<void> { throw new Error("Not implemented in MemStorage"); }
   async getIntegrationsConfig(_userId: string): Promise<IntegrationsConfig | undefined> { return undefined; }
   async upsertIntegrationsConfig(_userId: string, config: Partial<IntegrationsConfig>): Promise<IntegrationsConfig> { throw new Error("Not implemented in MemStorage"); }
 }
@@ -747,6 +749,10 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return result;
+  }
+
+  async clearNotionVideos(userId: string): Promise<void> {
+    await this.db.delete(notionUpcomingVideos).where(eq(notionUpcomingVideos.userId, userId));
   }
 
   // ─── Integrations Config ─────────────────────────────────────────────────────

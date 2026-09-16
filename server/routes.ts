@@ -1067,6 +1067,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const videos = await notion.getUpcomingVideos();
+      await storage.clearNotionVideos(userId);
       let synced = 0;
       for (const v of videos) {
         await storage.upsertNotionVideo(userId, v);
@@ -1080,20 +1081,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET synced Notion upcoming videos (Upcoming/Future & active recent)
+  // GET synced Notion upcoming videos (STRICTLY Future & Unscheduled)
   app.get("/api/integrations/notion/videos", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const videos = await storage.getNotionVideos(userId);
 
-      const fourteenDaysAgo = new Date();
-      fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-      fourteenDaysAgo.setHours(0, 0, 0, 0);
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+
+      const finishedStatuses = [
+        "published", "publicado", "done", "completado", "finalizado", 
+        "terminado", "archived", "archivado", "listo", "posted", 
+        "subido", "youtube", "grabado", "editado", "released"
+      ];
 
       const upcomingOnly = videos.filter(v => {
-        if (!v.targetDate) return true;
-        const d = new Date(v.targetDate);
-        return d >= fourteenDaysAgo;
+        // 1. Exclude any finished / published status
+        const statusLower = (v.status || "").toLowerCase();
+        const isFinished = finishedStatuses.some(s => statusLower.includes(s));
+        if (isFinished) return false;
+
+        // 2. Exclude past target dates
+        if (v.targetDate) {
+          const d = new Date(v.targetDate);
+          if (d < startOfToday) return false;
+        }
+
+        return true;
       });
 
       res.json(upcomingOnly);
