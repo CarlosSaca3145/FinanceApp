@@ -12,6 +12,8 @@ import { useAuth } from "./hooks/useAuth";
 import Landing from "./pages/landing";
 import { Loader2 } from "lucide-react";
 
+import { ErrorBoundary } from "@/components/error-boundary";
+
 function Router() {
   const [location] = useLocation();
   const { isLoading, isAuthenticated } = useAuth();
@@ -50,12 +52,14 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
