@@ -18,6 +18,7 @@ import {
   ChevronUp,
   ExternalLink,
   Eye,
+  Calendar,
 } from "lucide-react";
 
 interface IntegrationsSettingsModalProps {
