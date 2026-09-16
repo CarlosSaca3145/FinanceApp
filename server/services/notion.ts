@@ -92,8 +92,36 @@ export class NotionService {
     this.nicheProperty = opts.nicheProperty || "Niche";
   }
 
+  /**
+   * Search Notion workspace for databases shared with this integration token.
+   */
+  private async searchAccessibleDatabase(): Promise<string | null> {
+    try {
+      const res = await fetch("https://api.notion.com/v1/search", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          "Notion-Version": "2022-06-28",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ filter: { value: "database", property: "object" } }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.results && data.results.length > 0) {
+          const firstDb = data.results[0];
+          console.log(`[NOTION] Auto-discovered database "${firstDb.title?.[0]?.plain_text || 'Untitled'}" (${firstDb.id})`);
+          return firstDb.id.replace(/-/g, "");
+        }
+      }
+    } catch (e) {
+      console.error("[NOTION] Auto-search databases error:", e);
+    }
+    return null;
+  }
+
   private async queryDatabaseRaw(body: Record<string, any>): Promise<any> {
-    const res = await fetch(
+    let res = await fetch(
       `https://api.notion.com/v1/databases/${this.databaseId}/query`,
       {
         method: "POST",
@@ -105,6 +133,27 @@ export class NotionService {
         body: JSON.stringify(body),
       }
     );
+
+    // If 404, attempt auto-discovery of databases shared with the token
+    if (!res.ok && res.status === 404) {
+      console.warn(`[NOTION] Direct query for DB ID ${this.databaseId} returned 404. Attempting auto-discovery...`);
+      const discoveredId = await this.searchAccessibleDatabase();
+      if (discoveredId && discoveredId !== this.databaseId) {
+        this.databaseId = discoveredId;
+        res = await fetch(
+          `https://api.notion.com/v1/databases/${this.databaseId}/query`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${this.token}`,
+              "Notion-Version": "2022-06-28",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+          }
+        );
+      }
+    }
 
     if (!res.ok) {
       const err = await res.text();
