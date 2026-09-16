@@ -20,6 +20,7 @@ type NotionPropertyValue = {
   rich_text?: Array<{ plain_text: string }>;
   date?: { start: string } | null;
   select?: { name: string } | null;
+  status?: { name: string } | null;
   multi_select?: Array<{ name: string }>;
   checkbox?: boolean;
   url?: string | null;
@@ -34,6 +35,7 @@ function extractText(prop: NotionPropertyValue | undefined): string {
     return prop.rich_text.map(t => t.plain_text).join("");
   }
   if (prop.type === "select" && prop.select) return prop.select.name;
+  if (prop.type === "status" && prop.status) return prop.status.name;
   if (prop.type === "multi_select" && prop.multi_select) {
     return prop.multi_select.map(m => m.name).join(", ");
   }
@@ -82,7 +84,7 @@ export class NotionService {
     statusProperty?: string;
     nicheProperty?: string;
   }) {
-    this.token = opts.token;
+    this.token = opts.token.trim();
     this.databaseId = extractNotionDatabaseId(opts.databaseId);
     this.titleProperty = opts.titleProperty || "Name";
     this.dateProperty = opts.dateProperty || "Date";
@@ -90,16 +92,7 @@ export class NotionService {
     this.nicheProperty = opts.nicheProperty || "Niche";
   }
 
-  private async queryDatabase(startCursor?: string): Promise<any> {
-    const body: Record<string, any> = {
-      sorts: [{ property: this.dateProperty, direction: "ascending" }],
-      filter: {
-        property: this.statusProperty,
-        select: { does_not_equal: "Published" },
-      },
-    };
-    if (startCursor) body.start_cursor = startCursor;
-
+  private async queryDatabaseRaw(body: Record<string, any>): Promise<any> {
     const res = await fetch(
       `https://api.notion.com/v1/databases/${this.databaseId}/query`,
       {
@@ -120,8 +113,29 @@ export class NotionService {
     return res.json();
   }
 
+  private async queryDatabase(startCursor?: string): Promise<any> {
+    // First try with strict filters
+    try {
+      const bodyWithFilters: Record<string, any> = {
+        sorts: [{ property: this.dateProperty, direction: "ascending" }],
+        filter: {
+          property: this.statusProperty,
+          select: { does_not_equal: "Published" },
+        },
+      };
+      if (startCursor) bodyWithFilters.start_cursor = startCursor;
+      return await this.queryDatabaseRaw(bodyWithFilters);
+    } catch (err) {
+      console.warn("[NOTION] Query with filters failed, retrying un-filtered query:", err);
+      // Fallback: Query database without custom filters/sorts
+      const fallbackBody: Record<string, any> = {};
+      if (startCursor) fallbackBody.start_cursor = startCursor;
+      return await this.queryDatabaseRaw(fallbackBody);
+    }
+  }
+
   /**
-   * Fetches all upcoming (non-Published) videos from the Notion database.
+   * Fetches all upcoming videos from the Notion database.
    */
   async getUpcomingVideos(): Promise<NotionVideoData[]> {
     const videos: NotionVideoData[] = [];
@@ -132,18 +146,41 @@ export class NotionService {
       const data = await this.queryDatabase(cursor);
       for (const page of data.results || []) {
         const props: Record<string, NotionPropertyValue> = page.properties || {};
-        const title = extractText(props[this.titleProperty]);
+        
+        // Find title property (by configured name or any 'title' type)
+        let titleProp = props[this.titleProperty] || props["Name"] || props["Nombre"] || props["Título"];
+        if (!titleProp) {
+          titleProp = Object.values(props).find(p => p.type === "title") as NotionPropertyValue;
+        }
+        const title = extractText(titleProp);
         if (!title) continue;
 
-        const statusRaw = extractText(props[this.statusProperty]) || "Planned";
-        // Check if there's a "Sponsorship Available" checkbox; default to true
-        const sponsorshipAvailable = extractCheckbox(props["Sponsorship Available"]);
+        // Find date property
+        let dateProp = props[this.dateProperty] || props["Date"] || props["Fecha"] || props["Publicación"];
+        if (!dateProp) {
+          dateProp = Object.values(props).find(p => p.type === "date") as NotionPropertyValue;
+        }
+
+        // Find status property
+        let statusProp = props[this.statusProperty] || props["Status"] || props["Estado"] || props["Fase"];
+        if (!statusProp) {
+          statusProp = Object.values(props).find(p => p.type === "status" || p.type === "select") as NotionPropertyValue;
+        }
+        const statusRaw = extractText(statusProp) || "Planned";
+
+        // Find niche property
+        let nicheProp = props[this.nicheProperty] || props["Niche"] || props["Nicho"] || props["Categoría"];
+        if (!nicheProp) {
+          nicheProp = Object.values(props).find(p => p.type === "select" || p.type === "multi_select") as NotionPropertyValue;
+        }
+
+        const sponsorshipAvailable = extractCheckbox(props["Sponsorship Available"] || props["Patrocinio Disponible"]);
 
         videos.push({
           notionPageId: page.id,
           title,
-          nicho: extractText(props[this.nicheProperty]) || null,
-          targetDate: extractDate(props[this.dateProperty]),
+          nicho: extractText(nicheProp) || null,
+          targetDate: extractDate(dateProp),
           sponsorshipAvailable,
           status: statusRaw,
           notionUrl: page.url || null,
