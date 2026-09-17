@@ -1,5 +1,7 @@
 import nodemailer from "nodemailer";
 
+const transporterCache = new Map<string, nodemailer.Transporter>();
+
 interface EmailParams {
   to: string;
   subject: string;
@@ -37,6 +39,7 @@ export async function sendEmail(params: EmailParams): Promise<{ success: boolean
 
     // Strip quotes and whitespace from App Password
     const cleanPass = emailPassword.replace(/['"\s]+/g, "");
+    const cacheKey = `${emailUser}:${cleanPass}`;
 
     const mailOptions = {
       from: `"${params.name || "Saca Tech"}" <${emailUser}>`,
@@ -45,66 +48,51 @@ export async function sendEmail(params: EmailParams): Promise<{ success: boolean
       html: params.htmlBody,
     };
 
-    // Try service: "gmail" first (optimized for Google App Passwords), then fallback to direct ports
-    const transportOptions = [
-      {
-        name: "Gmail Service",
-        options: {
-          service: "gmail",
-          connectionTimeout: 10000,
-          greetingTimeout: 10000,
-          socketTimeout: 15000,
-          auth: { user: emailUser, pass: cleanPass },
-          tls: { rejectUnauthorized: false },
-        },
-      },
-      {
-        name: "Port 587 (TLS)",
-        options: {
-          host: "smtp.gmail.com",
-          port: 587,
-          secure: false,
-          requireTLS: true,
-          connectionTimeout: 10000,
-          greetingTimeout: 10000,
-          socketTimeout: 15000,
-          auth: { user: emailUser, pass: cleanPass },
-          tls: { rejectUnauthorized: false },
-        },
-      },
-      {
-        name: "Port 465 (SSL)",
-        options: {
+    let transporter = transporterCache.get(cacheKey);
+
+    if (!transporter) {
+      transporter = nodemailer.createTransport({
+        service: "gmail",
+        pool: true,
+        maxConnections: 5,
+        maxMessages: 100,
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 15000,
+        auth: { user: emailUser, pass: cleanPass },
+        tls: { rejectUnauthorized: false },
+      });
+      transporterCache.set(cacheKey, transporter);
+    }
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`[SMTP SUCCESS] Email sent to ${params.to}`);
+      return { success: true };
+    } catch (err: any) {
+      console.warn(`[SMTP WARN] Primary transport failed:`, err.message);
+      // Remove from cache if it failed, so it recreates next time
+      transporterCache.delete(cacheKey);
+      
+      // Fallback without pool
+      try {
+        const fallbackTransporter = nodemailer.createTransport({
           host: "smtp.gmail.com",
           port: 465,
           secure: true,
-          connectionTimeout: 10000,
-          greetingTimeout: 10000,
-          socketTimeout: 15000,
           auth: { user: emailUser, pass: cleanPass },
           tls: { rejectUnauthorized: false },
-        },
-      },
-    ];
-
-    let lastErrorMsg = "";
-
-    for (const item of transportOptions) {
-      try {
-        const transporter = nodemailer.createTransport(item.options as any);
-        await transporter.sendMail(mailOptions);
-        console.log(`[SMTP SUCCESS] Email sent to ${params.to} using ${item.name}`);
+        });
+        await fallbackTransporter.sendMail(mailOptions);
+        console.log(`[SMTP SUCCESS] Email sent to ${params.to} using fallback`);
         return { success: true };
-      } catch (err: any) {
-        console.warn(`[SMTP WARN] Transport ${item.name} failed:`, err.message);
-        lastErrorMsg = err.message || "Error al conectar";
+      } catch (fallbackErr: any) {
+        return {
+          success: false,
+          error: `Error SMTP (${emailUser}): ${fallbackErr.message || err.message}`,
+        };
       }
     }
-
-    return {
-      success: false,
-      error: `Error SMTP (${emailUser}): ${lastErrorMsg}`,
-    };
   } catch (error: any) {
     console.error('Email sending error:', error);
     return { 
