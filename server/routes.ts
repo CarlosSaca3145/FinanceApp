@@ -12,6 +12,7 @@ import { sendEmail, generateEmailHTML } from "./services/email";
 import { OpenAIService, type ContentGenerationOptions } from "./services/openai";
 import { z } from "zod";
 import { isAuthenticated } from "./auth";
+import { extractNotionDatabaseId } from "./services/notion";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -989,7 +990,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/integrations/config", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const { extractNotionDatabaseId } = await import("./services/notion");
       const body = { ...req.body };
       if (body.notionDatabaseId) {
         body.notionDatabaseId = extractNotionDatabaseId(body.notionDatabaseId);
