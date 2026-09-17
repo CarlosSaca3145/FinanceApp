@@ -292,13 +292,121 @@ export class YouTubeService {
     // Sort: best score first, then by views
     scored.sort((a, b) => b.score - a.score || b.v.viewCount - a.v.viewCount);
 
-    const best = scored[0];
-    if (!best || best.score === 0) return null;
+    const validMatches = scored
+      .filter(item => item.score > 0)
+      .map(item => ({ match: item.v, score: item.score, matchedKeywords: item.matched }));
+
+    const best = validMatches[0] || null;
+    if (!best) return null;
 
     return {
-      match: best.v,
+      match: best.match,
       score: best.score,
-      matchedKeywords: best.matched,
+      matchedKeywords: best.matchedKeywords,
+    };
+  }
+
+  /**
+   * Returns top matching horizontal YouTube videos as well as all horizontal videos sorted by view count,
+   * allowing creators to choose between multiple historical social proof options.
+   */
+  static findBestMatchesByTitle(
+    videos: YouTubeVideoData[],
+    notionVideoTitle: string
+  ): {
+    bestMatch: YouTubeVideoData | null;
+    matches: Array<{ match: YouTubeVideoData; score: number; matchedKeywords: string[] }>;
+    allHorizontal: YouTubeVideoData[];
+  } {
+    const horizontalVideos = videos.filter(v => !v.isShort);
+    const sortedAll = [...horizontalVideos].sort((a, b) => b.viewCount - a.viewCount);
+
+    const singleMatch = this.findBestMatchByTitle(videos, notionVideoTitle);
+    if (!singleMatch) {
+      return {
+        bestMatch: sortedAll[0] || null,
+        matches: sortedAll.map(v => ({ match: v, score: 0, matchedKeywords: [] })),
+        allHorizontal: sortedAll,
+      };
+    }
+
+    // Run scoring again to return all scored items
+    const stopWords = new Set([
+      "el", "la", "los", "las", "de", "del", "en", "y", "o", "un", "una",
+      "the", "a", "an", "of", "in", "and", "or", "for", "to", "is", "it",
+      "vs", "vs.", "versus", "con", "sin", "más", "mas", "mejor", "mejores",
+      "por", "que", "como", "review", "unboxing", "primeras", "impresiones",
+      "trucos", "secretos", "tips", "tricks", "best", "top", "new", "nuevo",
+      "nueva", "probé", "probe", "test", "testing", "tested",
+    ]);
+
+    const rawKeywords = notionVideoTitle
+      .toLowerCase()
+      .replace(/[^\w\sáéíóúñü]/g, " ")
+      .split(/\s+/)
+      .filter(w => w.length >= 2 && !stopWords.has(w));
+
+    const titleLower = notionVideoTitle.toLowerCase();
+    const productPatterns = [
+      /iphone\s*\d+\s*(pro\s*max|pro|plus|mini|fold|duo)?/g,
+      /ipad\s*(pro|air|mini)?\s*\d*/g,
+      /macbook\s*(pro|air)?\s*\d*/g,
+      /apple\s*watch\s*(ultra|se)?\s*\d*/g,
+      /airpods\s*(pro|max)?\s*\d*/g,
+      /ios\s*\d+/g,
+      /galaxy\s*s\d+\s*(ultra|plus|\+|fe)?/g,
+      /galaxy\s*z\s*(fold|flip)\s*\d*/g,
+      /pixel\s*\d+\s*(pro|a)?/g,
+      /android\s*\d+/g,
+      /poco\s*\w+\s*(ultra|pro)?/g,
+      /redmi\s*\w+\s*(pro|ultra)?/g,
+      /nothing\s*phone\s*\d*/g,
+      /oneplus\s*\d+\s*(pro|ultra)?/g,
+    ];
+
+    const productMatches: string[] = [];
+    for (const pattern of productPatterns) {
+      const matches = Array.from(titleLower.matchAll(pattern));
+      for (const m of matches) {
+        productMatches.push(m[0].trim());
+      }
+    }
+
+    const scored = horizontalVideos.map(v => {
+      const vTitleLow = v.title.toLowerCase();
+      const vTagsLow = (v.tags || []).join(" ").toLowerCase();
+      let score = 0;
+      const matched: string[] = [];
+
+      for (const product of productMatches) {
+        if (vTitleLow.includes(product)) {
+          score += 10;
+          matched.push(product);
+        } else if (vTagsLow.includes(product)) {
+          score += 5;
+          matched.push(product);
+        }
+      }
+
+      for (const kw of rawKeywords) {
+        if (vTitleLow.includes(kw)) {
+          score += 3;
+          if (!matched.includes(kw)) matched.push(kw);
+        } else if (vTagsLow.includes(kw)) {
+          score += 1;
+          if (!matched.includes(kw)) matched.push(kw);
+        }
+      }
+
+      return { match: v, score, matchedKeywords: matched };
+    });
+
+    scored.sort((a, b) => b.score - a.score || b.match.viewCount - a.match.viewCount);
+
+    return {
+      bestMatch: singleMatch.match,
+      matches: scored,
+      allHorizontal: sortedAll,
     };
   }
 }

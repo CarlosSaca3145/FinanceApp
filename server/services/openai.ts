@@ -494,29 +494,30 @@ Recipient & Brand Context:
 ${campaign && campaign.toLowerCase() !== 'general' ? `- Campaign: "${campaign}"` : ''}
 - Email Type: ${templateType === 'followup' ? 'Follow-up message' : 'Initial collaboration proposal'}
 
-${videoContext ? `Proposed Upcoming Video for Sponsorship:
+${videoContext ? `Proposed Upcoming High-Reach Video for Sponsorship:
 - Title: "${videoContext.title}"
-${videoContext.targetDate ? `- Estimated Publish Date: ${new Date(videoContext.targetDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}
-- Status: ${videoContext.status || 'In production'}
+(Note: Do NOT include internal Notion workflow status like "Escritura" or publish dates. Frame it as offering a dedicated 60-90s integration in an upcoming high-reach video on our channel.)
 ` : ''}
 
 ${matchedYoutubeVideo ? `Historical YouTube Performance (CRITICAL SOCIAL PROOF TO JUSTIFY EXPECTED VIEWS):
 - Historical Matched Video: "${matchedYoutubeVideo.title}"
 - Historical Views Achieved: ${matchedYoutubeVideo.formattedViews}
 - Video URL: ${matchedYoutubeVideo.url}
-* IMPORTANT: Explicitly cite this historical video and its ${matchedYoutubeVideo.formattedViews} views in the email to justify the view potential for the proposed video "${videoContext?.title || ''}".` : ''}
+* IMPORTANT: Explicitly cite this historical video and its ${matchedYoutubeVideo.formattedViews} views in the email to justify the high view performance for the proposed video "${videoContext?.title || ''}".` : ''}
 
 ${referenceVideoLink ? `Reference Video Example (Past Collaboration): ${referenceVideoLink}` : ''}
 
 Guidelines for the email:
 1. Language: ENTIRELY IN ENGLISH.
 2. Tone: Professional, confident, clear, and engaging.
-3. Structure:
+3. High-Reach Framing: Explicitly mention that we are offering a dedicated 60-90 second integration in an upcoming high-reach video on our channel.
+4. Clean Proposal: Do NOT include publication dates or internal Notion statuses (such as "Escritura", "Writing", etc.).
+5. Structure:
    - Paragraph 1: Friendly greeting + personalized hook about ${brandName} and its products in ${brandNiche}.
-   - Paragraph 2: Present the proposed upcoming video ("${videoContext?.title || ''}") for integration (60-90s dedicated integration segment).
+   - Paragraph 2: Present the proposed upcoming video ("${videoContext?.title || ''}") as a high-reach video opportunity.
    - Paragraph 3 (Social Proof / Historical Justification): Reference our historical performance on similar content (${matchedYoutubeVideo ? `citing "${matchedYoutubeVideo.title}" with ${matchedYoutubeVideo.formattedViews} views` : 'citing past channel metrics'}) as clear evidence of expected view trajectory.
-   - Paragraph 4: Clear call to action asking if they're open to discussing details or reviewing media kit.
-4. Sign off as:
+   - Paragraph 4: Clear call to action asking if they're open to a quick call or email exchange.
+6. Sign off as:
    Best regards,
    Carlos Saca
    Saca Tech | @saca.technology

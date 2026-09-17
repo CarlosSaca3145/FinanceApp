@@ -45,6 +45,7 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
 
   // ── Video state ───────────────────────────────────────────────────────
   const [selectedNotionVideoId, setSelectedNotionVideoId] = useState<string>("auto");
+  const [selectedYoutubeId, setSelectedYoutubeId] = useState<string>("auto");
   const [selectedVideoLink, setSelectedVideoLink] = useState("");
 
   // ── AI state ──────────────────────────────────────────────────────────
@@ -104,7 +105,14 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
     enabled: open && !!selectedVideo?.title,
   });
 
-  const matchedYoutubeVideo = youtubeMatchData?.found ? youtubeMatchData.matchedVideo : null;
+  const activeYoutubeMatch = useMemo(() => {
+    if (selectedYoutubeId === "none") return null;
+    const matchesList = youtubeMatchData?.matches || [];
+    if (selectedYoutubeId && selectedYoutubeId !== "auto") {
+      return matchesList.find((m: any) => m.youtubeId === selectedYoutubeId) || null;
+    }
+    return youtubeMatchData?.matchedVideo || matchesList[0] || null;
+  }, [selectedYoutubeId, youtubeMatchData]);
 
   // ── Mutations ─────────────────────────────────────────────────────────
   const sendEmailMutation = useMutation({
@@ -177,27 +185,21 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
     // Selected Notion video context
     let videoProposalBlock = "";
     if (selectedVideo) {
-      const dateStr = formatVideoDate(selectedVideo.targetDate);
-      const days = daysUntilPublish(selectedVideo.targetDate);
-      const urgency = days !== null && days <= 14 ? ` (only ${days} days until publication)` : "";
-
       let socialProof = "";
-      if (matchedYoutubeVideo) {
+      if (activeYoutubeMatch) {
         socialProof = `
 
 📊 HISTORICAL PERFORMANCE & EXPECTED VIEWS:
-Based on our channel history, our previous video on a similar topic ("${matchedYoutubeVideo.title}") reached ${matchedYoutubeVideo.formattedViews} views (${matchedYoutubeVideo.url}), giving us strong confidence in high view performance for this video.`;
+Based on our channel history, our previous video on a similar topic ("${activeYoutubeMatch.title}") reached ${activeYoutubeMatch.formattedViews} views (${activeYoutubeMatch.url}), giving us strong confidence in high view performance for this video.`;
       }
 
       videoProposalBlock = `
 
 📹 PROPOSED VIDEO FOR INTEGRATION:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Title: "${selectedVideo.title}"
-Estimated publish date: ${dateStr}${urgency}
-Current status: ${selectedVideo.status || "In production"}${socialProof}
+Title: "${selectedVideo.title}"${socialProof}
 
-This video is a perfect fit for ${brandName} as it's directly aligned with your industry (${brandNiche}) and would allow a natural, organic integration of your product/service within the content.`;
+We are offering a dedicated 60–90 second integration in this upcoming high-reach video on our channel, presented naturally and organically, showcasing your product/service in a real-world context. This video is a perfect fit for ${brandName} as it's directly aligned with your brand and target audience.`;
     }
 
     // Reference video link
@@ -215,8 +217,8 @@ To give you a sense of the quality and format of our integrations, here's an exa
       : "";
 
     if (templateType === "followup") {
-      const videoRef = selectedVideo ? ` regarding the video "${selectedVideo.title}"` : "";
-      const proofRef = matchedYoutubeVideo ? ` (our previous video in this category hit ${matchedYoutubeVideo.formattedViews} views)` : "";
+      const videoRef = selectedVideo ? ` regarding the upcoming high-reach video "${selectedVideo.title}"` : "";
+      const proofRef = activeYoutubeMatch ? ` (our previous video in this category hit ${activeYoutubeMatch.formattedViews} views)` : "";
       return `Hi ${contactName},
 
 This is Carlos Saca from Saca Tech (@saca.technology).
@@ -224,7 +226,7 @@ This is Carlos Saca from Saca Tech (@saca.technology).
 I wanted to follow up on my previous message about the collaboration opportunity${videoRef} with ${brandName}.
 
 We remain very interested in featuring your product/service in our content and believe our audience is a great fit for the ${brandNiche} space.
-${selectedVideo ? `\nThe video "${selectedVideo.title}" is still available for integration and the publish date is approaching (${formatVideoDate(selectedVideo.targetDate)})${proofRef}.` : ""}
+${selectedVideo ? `\nThe video "${selectedVideo.title}" is available for integration${proofRef}. We are offering a dedicated 60–90s integration slot in this upcoming high-reach video.` : ""}
 
 Would you have availability for a quick call or email exchange this week to discuss the details?
 
@@ -241,9 +243,9 @@ I'm Carlos Saca, tech content creator at Saca Tech (@saca.technology). We produc
 ${campaignLine}
 I'm reaching out because I see a great collaboration opportunity between ${brandName} and our channel. Our content is closely aligned with the ${brandNiche} space and we have a very active, engaged community.${videoProposalBlock}
 
-The integration would be a 60–90 second segment within the video, presented naturally and organically, showcasing your product/service in a real-world context. This approach drives significantly more credibility and engagement than traditional advertising.${referenceBlock}
+This approach drives significantly more credibility and engagement than traditional advertising.${referenceBlock}
 
-I'd love to discuss the details and tailor the integration to ${brandName}'s needs. Would you be open to a quick call or email exchange?
+Would you be open to a quick call or email exchange?
 
 Looking forward to hearing from you.
 
@@ -271,7 +273,7 @@ Saca Tech | @saca.technology`;
         campaign: brand.campania || null,
         templateType,
         videoContext,
-        matchedYoutubeVideo,
+        matchedYoutubeVideo: activeYoutubeMatch,
         referenceVideoLink: selectedVideoLink || null,
       });
 
@@ -378,7 +380,7 @@ Saca Tech | @saca.technology`;
     if (brand && !emailGenerated) {
       setEditedEmailBody(generateProfessionalEmail());
     }
-  }, [brand, templateType, selectedNotionVideoId, selectedVideoLink, notionVideos, matchedYoutubeVideo]);
+  }, [brand, templateType, selectedNotionVideoId, selectedVideoLink, notionVideos, activeYoutubeMatch]);
 
   // ── Derived ───────────────────────────────────────────────────────────
   if (!brand) return null;
@@ -535,40 +537,88 @@ Saca Tech | @saca.technology`;
                           )}
                         </div>
 
-                        {/* YouTube Social Proof Match Card */}
+                        {/* YouTube Social Proof Match Selector */}
                         {isMatchingYoutube ? (
                           <div className="mt-3 p-3 bg-muted/40 rounded-lg text-xs text-muted-foreground flex items-center gap-2 animate-pulse">
                             <RefreshCw className="h-3.5 w-3.5 animate-spin text-indigo-500" />
-                            Buscando match histórico en YouTube para justificar visualizaciones...
+                            Buscando matches históricos en YouTube para justificar visualizaciones...
                           </div>
-                        ) : matchedYoutubeVideo ? (
-                          <div className="mt-3 p-3.5 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-emerald-500/10 border border-amber-500/30 rounded-xl space-y-1.5 shadow-sm">
-                            <div className="flex items-center justify-between">
+                        ) : (youtubeMatchData?.matches?.length ?? 0) > 0 ? (
+                          <div className="mt-3 p-3.5 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-emerald-500/10 border border-amber-500/30 rounded-xl space-y-2.5 shadow-sm">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
                               <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
-                                🔥 Match Histórico en YouTube (Justificación de Views)
+                                🔥 Selecciona el Vídeo Histórico de YouTube (Prueba Social)
                               </span>
-                              <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] px-2.5 py-0.5 shadow-sm">
-                                {matchedYoutubeVideo.formattedViews} views
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-foreground font-semibold line-clamp-1">
-                              "{matchedYoutubeVideo.title}"
-                            </p>
-                            <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
-                              <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                                ✓ Se incluirá como justificación de views en el email para {brand.marca}
-                              </span>
-                              {matchedYoutubeVideo.url && (
-                                <a
-                                  href={matchedYoutubeVideo.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 font-medium"
-                                >
-                                  Ver vídeo <ExternalLink className="h-3 w-3" />
-                                </a>
+                              {activeYoutubeMatch && (
+                                <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] px-2.5 py-0.5 shadow-sm">
+                                  {activeYoutubeMatch.formattedViews} views
+                                </Badge>
                               )}
                             </div>
+
+                            {/* Options list */}
+                            <div className="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto pr-1">
+                              {youtubeMatchData.matches.map((vMatch: any) => {
+                                const isSelected = activeYoutubeMatch?.youtubeId === vMatch.youtubeId;
+                                return (
+                                  <button
+                                    key={vMatch.youtubeId}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedYoutubeId(vMatch.youtubeId);
+                                      setEmailGenerated(false);
+                                    }}
+                                    className={`text-left p-2 rounded-lg border text-xs transition-all flex items-center justify-between gap-2 ${
+                                      isSelected
+                                        ? "bg-amber-500/15 border-amber-500/50 text-foreground font-semibold shadow-sm ring-1 ring-amber-500/30"
+                                        : "bg-card/70 border-border/70 hover:bg-amber-500/5 hover:border-amber-500/30 text-muted-foreground"
+                                    }`}
+                                  >
+                                    <span className="truncate flex-1">
+                                      {isSelected ? "✓ " : "• "}"{vMatch.title}"
+                                    </span>
+                                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 flex-shrink-0 ${
+                                      isSelected ? "border-amber-500 text-amber-600 font-bold" : "border-border text-muted-foreground"
+                                    }`}>
+                                      {vMatch.formattedViews} views
+                                    </Badge>
+                                  </button>
+                                );
+                              })}
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedYoutubeId("none");
+                                  setEmailGenerated(false);
+                                }}
+                                className={`text-left p-2 rounded-lg border text-xs transition-all ${
+                                  selectedYoutubeId === "none"
+                                    ? "bg-gray-500/15 border-gray-500/50 text-foreground font-semibold"
+                                    : "bg-card/70 border-border/70 hover:bg-muted text-muted-foreground"
+                                }`}
+                              >
+                                🚫 No incluir prueba social de YouTube
+                              </button>
+                            </div>
+
+                            {activeYoutubeMatch && (
+                              <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-amber-500/20">
+                                <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                                  ✓ Se incluirá como justificación de views en el email para {brand.marca}
+                                </span>
+                                {activeYoutubeMatch.url && (
+                                  <a
+                                    href={activeYoutubeMatch.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 font-medium"
+                                  >
+                                    Ver vídeo <ExternalLink className="h-3 w-3" />
+                                  </a>
+                                )}
+                              </div>
+                            )}
                           </div>
                         ) : null}
                       </div>

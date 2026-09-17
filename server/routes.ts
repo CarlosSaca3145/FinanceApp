@@ -1095,26 +1095,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isShort: v.isShort ?? false,
       }));
 
-      const result = YouTubeService.findBestMatchByTitle(allVideos, title as string);
+      const { bestMatch, matches, allHorizontal } = YouTubeService.findBestMatchesByTitle(allVideos, title as string);
 
-      if (result) {
+      const formattedScoredMatches = matches.slice(0, 6).map(m => ({
+        youtubeId: m.match.youtubeId,
+        title: m.match.title,
+        url: m.match.url,
+        viewCount: m.match.viewCount,
+        formattedViews: formatViews(m.match.viewCount),
+        thumbnailUrl: m.match.thumbnailUrl,
+        publishedAt: m.match.publishedAt,
+        score: m.score,
+        matchedKeywords: m.matchedKeywords,
+      }));
+
+      // Top horizontal videos by views as extra choices
+      const topByViews = [...allHorizontal]
+        .sort((a, b) => b.viewCount - a.viewCount)
+        .slice(0, 6)
+        .map(v => ({
+          youtubeId: v.youtubeId,
+          title: v.title,
+          url: v.url,
+          viewCount: v.viewCount,
+          formattedViews: formatViews(v.viewCount),
+          thumbnailUrl: v.thumbnailUrl,
+          publishedAt: v.publishedAt,
+          score: 0,
+          matchedKeywords: [],
+        }));
+
+      // Combine and deduplicate
+      const map = new Map<string, any>();
+      for (const item of formattedScoredMatches) map.set(item.youtubeId, item);
+      for (const item of topByViews) {
+        if (!map.has(item.youtubeId)) map.set(item.youtubeId, item);
+      }
+
+      const allChoices = Array.from(map.values());
+      const topMatch = allChoices[0] || null;
+
+      if (topMatch) {
         res.json({
           found: true,
-          matchedVideo: {
-            title: result.match.title,
-            url: result.match.url,
-            youtubeId: result.match.youtubeId,
-            viewCount: result.match.viewCount,
-            formattedViews: formatViews(result.match.viewCount),
-            likeCount: result.match.likeCount,
-            thumbnailUrl: result.match.thumbnailUrl,
-            publishedAt: result.match.publishedAt,
-          },
-          score: result.score,
-          matchedKeywords: result.matchedKeywords,
+          matchedVideo: topMatch,
+          matches: allChoices,
         });
       } else {
-        res.json({ found: false, matchedVideo: null, score: 0, matchedKeywords: [] });
+        res.json({ found: false, matchedVideo: null, matches: [] });
       }
     } catch (error) {
       res.status(500).json({ error: "Failed to find matching YouTube video" });
