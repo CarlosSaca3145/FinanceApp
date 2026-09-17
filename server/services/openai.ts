@@ -365,35 +365,35 @@ Respond in JSON format:
 
     const shortVideoSection = shortVideo
       ? `
-- **Opción A – Vídeo Vertical Corto (TikTok + Instagram + YouTube Shorts)**:
-  Referencia de nuestro vídeo sobre ${brandNiche} más viral:
-  - Título: "${shortVideo.title}"
-  - Visualizaciones: **${shortVideo.formattedViews}** views
-  - Enlace: ${shortVideo.url}
+- **Option A – Short Vertical Video (TikTok + Instagram + YouTube Shorts)**:
+  Reference from our most viral ${brandNiche} video:
+  - Title: "${shortVideo.title}"
+  - Views: **${shortVideo.formattedViews}** views
+  - Link: ${shortVideo.url}
 `
-      : `- **Opción A – Vídeo Vertical Corto (TikTok + Instagram + YouTube Shorts)**: Formato multiplataforma, alta visibilidad de ${brandNiche}.`;
+      : `- **Option A – Short Vertical Video (TikTok + Instagram + YouTube Shorts)**: Multi-platform format, high visibility for ${brandNiche}.`;
 
     const horizontalSection = upcomingVideo
       ? `
-- **Opción B – Integración Horizontal en YouTube (60–90 segundos)**:
-  Próximo vídeo agendado donde podemos integrar ${brandName}:
-  - Título: "${upcomingVideo.title}"
-  ${upcomingVideo.targetDate ? `- Fecha estimada de publicación: ${upcomingVideo.targetDate.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}` : ""}
-  ${longVideo ? `- Referencia histórica del canal: "${longVideo.title}" — ${longVideo.formattedViews} views` : ""}
+- **Option B – Horizontal YouTube Integration (60–90 seconds)**:
+  Upcoming scheduled video where we can integrate ${brandName}:
+  - Title: "${upcomingVideo.title}"
+  ${upcomingVideo.targetDate ? `- Estimated publish date: ${upcomingVideo.targetDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ""}
+  ${longVideo ? `- Channel reference: "${longVideo.title}" — ${longVideo.formattedViews} views` : ""}
 `
       : longVideo
       ? `
-- **Opción B – Integración Horizontal en YouTube (60–90 segundos)**:
-  Referencia de nuestro vídeo de mayor alcance:
-  - Título: "${longVideo.title}"
-  - Visualizaciones: **${longVideo.formattedViews}** views
-  - Enlace: ${longVideo.url}
+- **Option B – Horizontal YouTube Integration (60–90 seconds)**:
+  Reference from our highest-reach video:
+  - Title: "${longVideo.title}"
+  - Views: **${longVideo.formattedViews}** views
+  - Link: ${longVideo.url}
 `
-      : `- **Opción B – Integración Horizontal en YouTube (60–90 segundos)**: Bloque dedicado en vídeos de alto alcance de nuestro canal.`;
+      : `- **Option B – Horizontal YouTube Integration (60–90 seconds)**: Dedicated segment in our channel's highest-reach videos.`;
 
     const prompt = `You are an expert at writing high-converting YouTube creator sponsorship outreach emails.
 
-Generate a professional, natural, and persuasive sponsorship pitch email in Spanish for this creator.
+Generate a professional, natural, and persuasive sponsorship pitch email in English for this creator.
 
 Creator context:
 - Greeting: "${greeting}"
@@ -418,7 +418,7 @@ Writing rules:
 3. Present both options clearly with their metrics/social proof.
 4. End with a clear, low-pressure CTA — ask which option interests them most.
 5. Tone: professional but warm, like a confident creator who knows their value.
-6. Write ENTIRELY in Spanish.
+6. Write ENTIRELY in English.
 7. Do NOT use placeholder text — be specific and concrete.
 
 Respond ONLY as JSON:
@@ -442,8 +442,8 @@ Respond ONLY as JSON:
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
     return {
-      subject: result.subject || `Colaboración — ${brandName}`,
-      htmlBody: result.htmlBody || `<p>Hola,</p><p>Me gustaría hablar de una colaboración con ${brandName}.</p>`,
+      subject: result.subject || `Collaboration — ${brandName}`,
+      htmlBody: result.htmlBody || `<p>Hi,</p><p>I'd like to discuss a collaboration with ${brandName}.</p>`,
     };
   }
 }
