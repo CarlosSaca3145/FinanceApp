@@ -24,21 +24,11 @@ export async function sendEmail(params: EmailParams): Promise<{ success: boolean
     if (!emailPassword) {
       return {
         success: false,
-        error: "❌ No se pudo enviar el correo: no hay Contraseña de Aplicación de Gmail configurada. Ve a Ajustes > Integraciones para ingresar tu Contraseña de Aplicación para " + emailUser,
+        error: "❌ No se pudo enviar el correo: no hay Contraseña de Aplicación de Gmail configurada. Ingresa tu Contraseña de Aplicación para " + emailUser,
       };
     }
 
     const cleanPass = emailPassword.replace(/\s+/g, "");
-
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: {
-        user: emailUser,
-        pass: cleanPass,
-      },
-    });
 
     const mailOptions = {
       from: `"${params.name || "Saca Tech"}" <${emailUser}>`,
@@ -47,8 +37,43 @@ export async function sendEmail(params: EmailParams): Promise<{ success: boolean
       html: params.htmlBody,
     };
 
-    await transporter.sendMail(mailOptions);
-    return { success: true };
+    // Try port 465 (SSL) and fallback to 587 (TLS/STARTTLS) with 8s connection timeouts
+    const configurations = [
+      { port: 465, secure: true, requireTLS: false },
+      { port: 587, secure: false, requireTLS: true },
+    ];
+
+    let lastErrorMsg = "";
+
+    for (const config of configurations) {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: "smtp.gmail.com",
+          port: config.port,
+          secure: config.secure,
+          requireTLS: config.requireTLS,
+          connectionTimeout: 8000, // 8 seconds
+          greetingTimeout: 8000,
+          socketTimeout: 12000,
+          auth: {
+            user: emailUser,
+            pass: cleanPass,
+          },
+        });
+
+        await transporter.sendMail(mailOptions);
+        console.log(`[SMTP SUCCESS] Email sent to ${params.to} using port ${config.port}`);
+        return { success: true };
+      } catch (err: any) {
+        console.warn(`[SMTP WARN] Port ${config.port} failed:`, err.message);
+        lastErrorMsg = err.message || "Error al conectar";
+      }
+    }
+
+    return {
+      success: false,
+      error: `Error SMTP (${emailUser}): ${lastErrorMsg}`,
+    };
   } catch (error: any) {
     console.error('Email sending error:', error);
     return { 
