@@ -14,7 +14,7 @@ interface SidebarProps {
 const navigation = [
   { id: "dashboard", label: "Dashboard", icon: BarChart3, path: "/" },
   { id: "brands", label: "Brands", icon: Building, path: "/brands" },
-  { id: "content", label: "Content Templates", icon: FileText, path: "/content-templates" },
+  { id: "content", label: "Contenido", icon: FileText, path: "/content" },
   { id: "settings", label: "Ajustes & Integraciones", icon: Settings, path: "/settings" },
 ];
 
