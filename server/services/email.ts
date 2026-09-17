@@ -12,23 +12,31 @@ interface EmailParams {
 export async function sendEmail(params: EmailParams): Promise<{ success: boolean; error?: string }> {
   let emailUser = process.env.EMAIL_USER || "c@saca.technology";
   try {
-    let emailPassword = process.env.EMAIL_PASSWORD || process.env.EMAIL_APP_PASSWORD || "";
+    let emailPassword = "";
 
     if (params.userId) {
       const { storage } = await import("../storage");
       const config = await storage.getIntegrationsConfig(params.userId);
       if (config?.smtpEmail) emailUser = config.smtpEmail;
-      if (config?.smtpPassword) emailPassword = config.smtpPassword;
+      // Ignore masked dots '••••••••••'
+      if (config?.smtpPassword && config.smtpPassword !== "••••••••••" && !config.smtpPassword.includes("•")) {
+        emailPassword = config.smtpPassword;
+      }
     }
 
     if (!emailPassword) {
+      emailPassword = process.env.EMAIL_PASSWORD || process.env.EMAIL_APP_PASSWORD || "";
+    }
+
+    if (!emailPassword || emailPassword.includes("•")) {
       return {
         success: false,
-        error: "❌ No se pudo enviar el correo: no hay Contraseña de Aplicación de Gmail configurada. Ingresa tu Contraseña de Aplicación para " + emailUser,
+        error: "❌ No se pudo enviar el correo: no hay Contraseña de Aplicación de Gmail configurada. Ingresa tu Contraseña de Aplicación (16 caracteres) para " + emailUser,
       };
     }
 
-    const cleanPass = emailPassword.replace(/\s+/g, "");
+    // Strip quotes and whitespace from App Password
+    const cleanPass = emailPassword.replace(/['"\s]+/g, "");
 
     const mailOptions = {
       from: `"${params.name || "Saca Tech"}" <${emailUser}>`,
@@ -37,35 +45,58 @@ export async function sendEmail(params: EmailParams): Promise<{ success: boolean
       html: params.htmlBody,
     };
 
-    // Try port 465 (SSL) and fallback to 587 (TLS/STARTTLS) with 8s connection timeouts
-    const configurations = [
-      { port: 465, secure: true, requireTLS: false },
-      { port: 587, secure: false, requireTLS: true },
+    // Try service: "gmail" first (optimized for Google App Passwords), then fallback to direct ports
+    const transportOptions = [
+      {
+        name: "Gmail Service",
+        options: {
+          service: "gmail",
+          connectionTimeout: 10000,
+          greetingTimeout: 10000,
+          socketTimeout: 15000,
+          auth: { user: emailUser, pass: cleanPass },
+          tls: { rejectUnauthorized: false },
+        },
+      },
+      {
+        name: "Port 587 (TLS)",
+        options: {
+          host: "smtp.gmail.com",
+          port: 587,
+          secure: false,
+          requireTLS: true,
+          connectionTimeout: 10000,
+          greetingTimeout: 10000,
+          socketTimeout: 15000,
+          auth: { user: emailUser, pass: cleanPass },
+          tls: { rejectUnauthorized: false },
+        },
+      },
+      {
+        name: "Port 465 (SSL)",
+        options: {
+          host: "smtp.gmail.com",
+          port: 465,
+          secure: true,
+          connectionTimeout: 10000,
+          greetingTimeout: 10000,
+          socketTimeout: 15000,
+          auth: { user: emailUser, pass: cleanPass },
+          tls: { rejectUnauthorized: false },
+        },
+      },
     ];
 
     let lastErrorMsg = "";
 
-    for (const config of configurations) {
+    for (const item of transportOptions) {
       try {
-        const transporter = nodemailer.createTransport({
-          host: "smtp.gmail.com",
-          port: config.port,
-          secure: config.secure,
-          requireTLS: config.requireTLS,
-          connectionTimeout: 8000, // 8 seconds
-          greetingTimeout: 8000,
-          socketTimeout: 12000,
-          auth: {
-            user: emailUser,
-            pass: cleanPass,
-          },
-        });
-
+        const transporter = nodemailer.createTransport(item.options as any);
         await transporter.sendMail(mailOptions);
-        console.log(`[SMTP SUCCESS] Email sent to ${params.to} using port ${config.port}`);
+        console.log(`[SMTP SUCCESS] Email sent to ${params.to} using ${item.name}`);
         return { success: true };
       } catch (err: any) {
-        console.warn(`[SMTP WARN] Port ${config.port} failed:`, err.message);
+        console.warn(`[SMTP WARN] Transport ${item.name} failed:`, err.message);
         lastErrorMsg = err.message || "Error al conectar";
       }
     }
