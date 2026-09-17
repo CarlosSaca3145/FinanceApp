@@ -1098,16 +1098,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ];
 
       const upcomingOnly = videos.filter(v => {
-        // 1. Exclude any finished / published / por publicar status
         const statusLower = (v.status || "").toLowerCase();
+
+        // 1. Exclude Ideas
+        const isIdea = ["idea", "brainstorm", "concepto", "concept", "por definir"].some(s => statusLower.includes(s));
+        if (isIdea) return false;
+
+        // 2. Exclude any finished / published / por publicar status
         const isExcluded = excludedStatuses.some(s => statusLower.includes(s));
         if (isExcluded) return false;
 
-        // 2. Exclude past target dates
+        // 3. Exclude past target dates
         if (v.targetDate) {
           const d = new Date(v.targetDate);
           if (d < startOfToday) return false;
         }
+
+        // 4. Require Writing stage (Escritura / Guion) or Sold status
+        const isWritingStage = ["escritura", "guion", "guión", "writing", "scripting", "redacc"].some(s => statusLower.includes(s));
+        const isSoldStatus = ["vendido", "sold", "patrocinado", "sponsored", "cerrado", "asignado"].some(s => statusLower.includes(s));
+
+        if (!isWritingStage && !isSoldStatus) return false;
+
+        // 5. Exclude Vertical Videos (Shorts, Reels, TikTok, Vertical) - Only Horizontal videos
+        const titleLower = (v.title || "").toLowerCase();
+        const isVertical = [
+          "short", "shorts", "reel", "reels", "tiktok", "vertical", 
+          "#shorts", "#reels", "#tiktok"
+        ].some(kw => titleLower.includes(kw) || statusLower.includes(kw));
+
+        if (isVertical) return false;
 
         return true;
       });

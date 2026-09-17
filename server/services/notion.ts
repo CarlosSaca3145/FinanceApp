@@ -275,8 +275,17 @@ export class NotionService {
         }
         const statusRaw = extractText(statusProp) || "Planned";
 
-        // Filter out completed / published / por publicar statuses
+        // Status classification: Exclude Ideas, Published, and Por Publicar
         const statusLower = statusRaw.toLowerCase();
+        
+        // 1. Exclude Ideas
+        const isIdea = ["idea", "brainstorm", "concepto", "concept", "por definir"].some(s => statusLower.includes(s));
+        if (isIdea) {
+          console.log(`[NOTION DEBUG] Skipping Idea video "${title}" (status: ${statusRaw})`);
+          continue;
+        }
+
+        // 2. Exclude Finished / Published / Por Publicar / Grabado / Editado
         const isExcluded = [
           "published", "publicado", "por publicar", "por subir", "a publicar", 
           "listo para publicar", "ready to publish", "done", "completado", 
@@ -286,6 +295,30 @@ export class NotionService {
 
         if (isExcluded) {
           console.log(`[NOTION DEBUG] Skipping published/ready-to-publish video "${title}" (status: ${statusRaw})`);
+          continue;
+        }
+
+        // 3. Require Writing stage (Escritura / Guion) or Sold status
+        const isWritingStage = ["escritura", "guion", "guión", "writing", "scripting", "redacc"].some(s => statusLower.includes(s));
+        const isSoldStatus = ["vendido", "sold", "patrocinado", "sponsored", "cerrado", "asignado"].some(s => statusLower.includes(s));
+
+        if (!isWritingStage && !isSoldStatus) {
+          console.log(`[NOTION DEBUG] Skipping non-writing stage video "${title}" (status: ${statusRaw})`);
+          continue;
+        }
+
+        // 4. Exclude Vertical Videos (Shorts, Reels, TikTok, Vertical) - Only Horizontal videos
+        let formatProp = props["Formato"] || props["Format"] || props["Tipo"] || props["Type"] || props["Plataforma"];
+        const formatText = extractText(formatProp).toLowerCase();
+        const titleLower = title.toLowerCase();
+
+        const isVertical = [
+          "short", "shorts", "reel", "reels", "tiktok", "vertical", 
+          "#shorts", "#reels", "#tiktok"
+        ].some(v => titleLower.includes(v) || statusLower.includes(v) || formatText.includes(v));
+
+        if (isVertical) {
+          console.log(`[NOTION DEBUG] Skipping vertical video "${title}" (format/title: ${formatText || title})`);
           continue;
         }
 
