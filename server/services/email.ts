@@ -1,4 +1,8 @@
 import nodemailer from "nodemailer";
+import dns from "dns";
+
+// Force Node to prefer IPv4. Render uses IPv6 which Google SMTP often silently drops/timeouts.
+dns.setDefaultResultOrder("ipv4first");
 
 const transporterCache = new Map<string, nodemailer.Transporter>();
 
