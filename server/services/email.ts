@@ -51,7 +51,7 @@ export async function sendEmail(params: EmailParams): Promise<{ success: boolean
     // We avoid 'pool: true' because NAT/firewalls often drop idle connections silently, causing 15s hangs.
     const transportConfigs = [
       {
-        name: "Port 465 (SSL)",
+        loggingName: "Port 465 (SSL)",
         host: "smtp.gmail.com",
         port: 465,
         secure: true,
@@ -62,7 +62,7 @@ export async function sendEmail(params: EmailParams): Promise<{ success: boolean
         tls: { rejectUnauthorized: false },
       },
       {
-        name: "Port 587 (TLS)",
+        loggingName: "Port 587 (TLS)",
         host: "smtp.gmail.com",
         port: 587,
         secure: false,
@@ -74,7 +74,7 @@ export async function sendEmail(params: EmailParams): Promise<{ success: boolean
         tls: { rejectUnauthorized: false },
       },
       {
-        name: "Gmail Service (Fallback)",
+        loggingName: "Gmail Service (Fallback)",
         service: "gmail",
         connectionTimeout: 8000,
         greetingTimeout: 8000,
@@ -90,10 +90,10 @@ export async function sendEmail(params: EmailParams): Promise<{ success: boolean
       try {
         const transporter = nodemailer.createTransport(config as any);
         await transporter.sendMail(mailOptions);
-        console.log(`[SMTP SUCCESS] Email sent to ${params.to} using ${config.name}`);
+        console.log(`[SMTP SUCCESS] Email sent to ${params.to} using ${config.loggingName}`);
         return { success: true };
       } catch (err: any) {
-        console.warn(`[SMTP WARN] Transport ${config.name} failed:`, err.message);
+        console.warn(`[SMTP WARN] Transport ${config.loggingName} failed:`, err.message);
         lastError = err.message;
       }
     }
