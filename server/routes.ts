@@ -957,31 +957,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const config = await storage.getIntegrationsConfig(userId);
-      // Never return raw API keys – mask them
-      if (config) {
-        res.json({
-          youtubeChannelId: config.youtubeChannelId,
-          youtubeApiKey: config.youtubeApiKey ? "••••••••••" : null,
-          notionToken: config.notionToken ? "••••••••••" : null,
-          notionDatabaseId: config.notionDatabaseId,
-          notionTitleProperty: config.notionTitleProperty,
-          notionDateProperty: config.notionDateProperty,
-          notionStatusProperty: config.notionStatusProperty,
-          notionNicheProperty: config.notionNicheProperty,
-          smtpEmail: config.smtpEmail || "c@saca.technology",
-          smtpPassword: config.smtpPassword ? "••••••••••" : "",
-          hasYoutube: !!(config.youtubeApiKey && config.youtubeChannelId),
-          hasNotion: !!(config.notionToken && config.notionDatabaseId),
-          hasSmtp: !!(config.smtpPassword || process.env.EMAIL_PASSWORD || process.env.EMAIL_APP_PASSWORD),
-        });
-      } else {
-        res.json({
-          smtpEmail: "c@saca.technology",
-          hasYoutube: false,
-          hasNotion: false,
-          hasSmtp: !!(process.env.EMAIL_PASSWORD || process.env.EMAIL_APP_PASSWORD),
-        });
-      }
+
+      const youtubeApiKey = config?.youtubeApiKey || process.env.YOUTUBE_API_KEY || "";
+      const youtubeChannelId = config?.youtubeChannelId || process.env.YOUTUBE_CHANNEL_ID || "UCd7y3M4yv5fA7S9hFkE4S_w";
+      const notionToken = config?.notionToken || process.env.NOTION_TOKEN || "";
+      const notionDatabaseId = config?.notionDatabaseId || process.env.NOTION_DATABASE_ID || "";
+      const smtpEmail = config?.smtpEmail || process.env.EMAIL_USER || "c@saca.technology";
+      const smtpPassword = config?.smtpPassword || process.env.EMAIL_PASSWORD || process.env.EMAIL_APP_PASSWORD || "";
+
+      res.json({
+        youtubeChannelId,
+        youtubeApiKey: youtubeApiKey ? "••••••••••" : null,
+        notionToken: notionToken ? "••••••••••" : null,
+        notionDatabaseId,
+        notionTitleProperty: config?.notionTitleProperty || "Name",
+        notionDateProperty: config?.notionDateProperty || "Date",
+        notionStatusProperty: config?.notionStatusProperty || "Status",
+        notionNicheProperty: config?.notionNicheProperty || "Niche",
+        smtpEmail,
+        smtpPassword: smtpPassword ? "••••••••••" : "",
+        hasYoutube: !!(youtubeApiKey && youtubeChannelId),
+        hasNotion: !!(notionToken && notionDatabaseId),
+        hasSmtp: !!smtpPassword,
+      });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch integrations config" });
     }

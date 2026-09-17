@@ -93,7 +93,7 @@ export function ResponsiveLayout({ activeTab, children }: ResponsiveLayoutProps)
               data-testid="nav-integrations"
             >
               <Zap className="h-4 w-4 text-yellow-500" />
-              <span>YouTube & Notion</span>
+              <span>Integraciones</span>
             </button>
           </div>
         </nav>
