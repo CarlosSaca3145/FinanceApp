@@ -615,7 +615,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const emailResult = await sendEmail({
         to: recipient,
         subject,
-        htmlBody: htmlBody + trackingImg,
+        htmlBody: htmlBody, // Removed trackingImg which might be causing Gmail spam filter to drop socket
         name: "Saca Tech",
         from: "c@saca.technology",
         userId,
