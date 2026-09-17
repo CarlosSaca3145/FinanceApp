@@ -11,5 +11,5 @@ export default defineConfig({
   dbCredentials: {
     url: process.env.DATABASE_URL,
   },
-  tablesFilter: ["users", "brands", "content_templates", "followup_templates", "email_logs"],
+  tablesFilter: ["users", "brands", "content_templates", "followup_templates", "email_logs", "youtube_videos", "notion_upcoming_videos", "integrations_config"],
 });
