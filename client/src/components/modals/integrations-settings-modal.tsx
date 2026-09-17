@@ -19,6 +19,8 @@ import {
   ExternalLink,
   Eye,
   Calendar,
+  Mail,
+  Send,
 } from "lucide-react";
 
 interface IntegrationsSettingsModalProps {
@@ -39,6 +41,8 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
   const [notionDateProperty, setNotionDateProperty] = useState("Date");
   const [notionStatusProperty, setNotionStatusProperty] = useState("Status");
   const [notionNicheProperty, setNotionNicheProperty] = useState("Niche");
+  const [smtpEmail, setSmtpEmail] = useState("c@saca.technology");
+  const [smtpPassword, setSmtpPassword] = useState("");
   const [showAdvancedNotion, setShowAdvancedNotion] = useState(false);
 
   // Load existing config
@@ -79,6 +83,7 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
       setNotionDateProperty(config.notionDateProperty || "Date");
       setNotionStatusProperty(config.notionStatusProperty || "Status");
       setNotionNicheProperty(config.notionNicheProperty || "Niche");
+      setSmtpEmail(config.smtpEmail || "c@saca.technology");
     }
   }, [config]);
 
@@ -100,10 +105,12 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
         notionDateProperty,
         notionStatusProperty,
         notionNicheProperty,
+        smtpEmail,
       };
       // Only include keys if they were edited (not masked)
       if (youtubeApiKey && youtubeApiKey !== "••••••••••") payload.youtubeApiKey = youtubeApiKey;
       if (notionToken && notionToken !== "••••••••••") payload.notionToken = notionToken;
+      if (smtpPassword && smtpPassword !== "••••••••••") payload.smtpPassword = smtpPassword;
 
       const res = await apiRequest("POST", "/api/integrations/config", payload);
       return res.json();
@@ -113,6 +120,7 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
       toast({ title: "✅ Configuración guardada", description: "Las credenciales se han guardado correctamente." });
       setYoutubeApiKey("");
       setNotionToken("");
+      setSmtpPassword("");
       // Trigger Notion sync if configured
       if (notionDatabaseId || config?.hasNotion) {
         notionSyncMutation.mutate();
@@ -120,6 +128,20 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.message || "No se pudo guardar la configuración", variant: "destructive" });
+    },
+  });
+
+  // Test email mutation
+  const testEmailMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/integrations/email/test", { to: smtpEmail });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "📧 Correo de Prueba Enviado", description: data.message || "Email enviado correctamente vía Gmail SMTP" });
+    },
+    onError: (err: any) => {
+      toast({ title: "❌ Error SMTP", description: err.message || "No se pudo enviar el correo de prueba", variant: "destructive" });
     },
   });
 
@@ -170,6 +192,88 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
         </DialogHeader>
 
         <div className="space-y-6 mt-4">
+
+          {/* ─── Email SMTP Section (Gmail / Google Workspace) ───────── */}
+          <div className="border border-border rounded-xl overflow-hidden shadow-sm">
+            <div className="bg-indigo-500/5 border-b border-border px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                <span className="font-semibold text-foreground">Correo Saliente SMTP (c@saca.technology)</span>
+              </div>
+              <div>
+                {config?.hasSmtp ? (
+                  <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 gap-1">
+                    <CheckCircle className="h-3 w-3" /> Configurado
+                  </Badge>
+                ) : (
+                  <Badge variant="destructive" className="gap-1">
+                    <XCircle className="h-3 w-3" /> Falta App Password
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <Label htmlFor="smtp-email" className="text-sm font-medium">
+                  Correo Emisor
+                </Label>
+                <Input
+                  id="smtp-email"
+                  value={smtpEmail}
+                  onChange={(e) => setSmtpEmail(e.target.value)}
+                  placeholder="c@saca.technology"
+                  className="mt-1 text-sm font-mono"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="smtp-pass" className="text-sm font-medium flex items-center justify-between">
+                  <span>Contraseña de Aplicación (Gmail / Google Workspace)</span>
+                  <a
+                    href="https://myaccount.google.com/apppasswords"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-0.5 font-normal"
+                  >
+                    Generar App Password <ExternalLink className="h-3 w-3" />
+                  </a>
+                </Label>
+                <Input
+                  id="smtp-pass"
+                  type="password"
+                  value={smtpPassword}
+                  onChange={(e) => setSmtpPassword(e.target.value)}
+                  placeholder={config?.smtpPassword ? "•••••••••• (guardada)" : "xxxx xxxx xxxx xxxx"}
+                  className="mt-1 font-mono text-sm"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1.5 leading-normal">
+                  ⚠️ Google requiere una <strong>Contraseña de Aplicación</strong> de 16 caracteres para enviar correos. Ve a tu cuenta de Google &gt; Seguridad &gt; Verificación en 2 pasos &gt; Contraseñas de aplicaciones.
+                </p>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <Button
+                  size="sm"
+                  onClick={() => saveMutation.mutate()}
+                  disabled={saveMutation.isPending}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  {saveMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Guardar Email SMTP
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => testEmailMutation.mutate()}
+                  disabled={testEmailMutation.isPending || (!config?.hasSmtp && !smtpPassword)}
+                  className="gap-1.5 border-indigo-500/30 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/20"
+                >
+                  <Send className={`h-3.5 w-3.5 ${testEmailMutation.isPending ? "animate-spin" : ""}`} />
+                  {testEmailMutation.isPending ? "Enviando..." : "Probar Envío"}
+                </Button>
+              </div>
+            </div>
+          </div>
 
           {/* ─── YouTube Section ─────────────────────────────────────── */}
           <div className="border border-border rounded-xl overflow-hidden">

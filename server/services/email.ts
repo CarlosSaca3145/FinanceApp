@@ -6,50 +6,42 @@ interface EmailParams {
   htmlBody: string;
   from?: string;
   name?: string;
-}
-
-// Create transporter using environment variables
-function createTransporter() {
-  const emailService = process.env.EMAIL_SERVICE || "gmail";
-  const emailUser = process.env.EMAIL_USER || "c@saca.technology";
-  const emailPassword = process.env.EMAIL_PASSWORD || process.env.EMAIL_APP_PASSWORD;
-
-  if (!emailPassword) {
-    throw new Error("EMAIL_PASSWORD or EMAIL_APP_PASSWORD environment variable must be set");
-  }
-
-  return nodemailer.createTransport({
-    service: emailService,
-    auth: {
-      user: emailUser,
-      pass: emailPassword,
-    },
-  });
+  userId?: string;
 }
 
 export async function sendEmail(params: EmailParams): Promise<{ success: boolean; error?: string }> {
+  let emailUser = process.env.EMAIL_USER || "c@saca.technology";
   try {
-    // Demo mode - if no email credentials are set, simulate successful sending
-    const emailUser = process.env.EMAIL_USER || "c@saca.technology";
-    const emailPassword = process.env.EMAIL_PASSWORD || process.env.EMAIL_APP_PASSWORD;
+    let emailPassword = process.env.EMAIL_PASSWORD || process.env.EMAIL_APP_PASSWORD || "";
 
-    if (!emailPassword) {
-      console.log('🔄 DEMO MODE: Email would be sent with the following details:');
-      console.log(`📧 From: ${params.name || "Saca Tech"} <${params.from || emailUser}>`);
-      console.log(`📬 To: ${params.to}`);
-      console.log(`📝 Subject: ${params.subject}`);
-      console.log(`✅ Email simulated successfully in demo mode`);
-      
-      // Simulate a small delay like a real email service
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      return { success: true };
+    if (params.userId) {
+      const { storage } = await import("../storage");
+      const config = await storage.getIntegrationsConfig(params.userId);
+      if (config?.smtpEmail) emailUser = config.smtpEmail;
+      if (config?.smtpPassword) emailPassword = config.smtpPassword;
     }
 
-    const transporter = createTransporter();
-    
+    if (!emailPassword) {
+      return {
+        success: false,
+        error: "❌ No se pudo enviar el correo: no hay Contraseña de Aplicación de Gmail configurada. Ve a Ajustes > Integraciones para ingresar tu Contraseña de Aplicación para " + emailUser,
+      };
+    }
+
+    const cleanPass = emailPassword.replace(/\s+/g, "");
+
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: {
+        user: emailUser,
+        pass: cleanPass,
+      },
+    });
+
     const mailOptions = {
-      from: `${params.name || "Saca Tech"} <${params.from || emailUser}>`,
+      from: `"${params.name || "Saca Tech"}" <${emailUser}>`,
       to: params.to,
       subject: params.subject,
       html: params.htmlBody,
@@ -57,11 +49,11 @@ export async function sendEmail(params: EmailParams): Promise<{ success: boolean
 
     await transporter.sendMail(mailOptions);
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Email sending error:', error);
     return { 
       success: false, 
-      error: error instanceof Error ? error.message : "Unknown error occurred" 
+      error: error?.message ? `Error SMTP (${emailUser}): ${error.message}` : "Error desconocido al enviar email" 
     };
   }
 }

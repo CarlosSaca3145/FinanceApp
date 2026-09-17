@@ -617,14 +617,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         htmlBody: htmlBody + trackingImg,
         name: "Saca Tech",
         from: "c@saca.technology",
+        userId,
       });
 
-      if (emailResult.success) {
-        // Update brand status
-        await storage.updateBrand(brandId, userId, {
-          estado: "✅ Enviado",
-          fechaEnvio: new Date(),
-        });
+      if (!emailResult.success) {
+        return res.status(400).json({ error: emailResult.error || "Error al enviar email" });
+      }
+
+      // Update brand status
+      await storage.updateBrand(brandId, userId, {
+        estado: "✅ Enviado",
+        fechaEnvio: new Date(),
+      });
 
         // Log the email with additional AI context
         await storage.createEmailLog(userId, {
@@ -638,20 +642,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         res.json({ success: true, message: `Email sent to ${brand.contacto || recipient}` });
-      } else {
-        // Log the failed email
-        await storage.createEmailLog(userId, {
-          id: logId,
-          brandId,
-          recipient,
-          subject,
-          htmlBody,
-          status: "failed",
-          error: emailResult.error,
-        });
-
-        res.status(500).json({ error: `Failed to send email: ${emailResult.error}` });
-      }
     } catch (error) {
       res.status(500).json({ error: "Failed to send email" });
     }
@@ -978,11 +968,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           notionDateProperty: config.notionDateProperty,
           notionStatusProperty: config.notionStatusProperty,
           notionNicheProperty: config.notionNicheProperty,
+          smtpEmail: config.smtpEmail || "c@saca.technology",
+          smtpPassword: config.smtpPassword ? "••••••••••" : "",
           hasYoutube: !!(config.youtubeApiKey && config.youtubeChannelId),
           hasNotion: !!(config.notionToken && config.notionDatabaseId),
+          hasSmtp: !!(config.smtpPassword || process.env.EMAIL_PASSWORD || process.env.EMAIL_APP_PASSWORD),
         });
       } else {
-        res.json({ hasYoutube: false, hasNotion: false });
+        res.json({
+          smtpEmail: "c@saca.technology",
+          hasYoutube: false,
+          hasNotion: false,
+          hasSmtp: !!(process.env.EMAIL_PASSWORD || process.env.EMAIL_APP_PASSWORD),
+        });
       }
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch integrations config" });
@@ -999,9 +997,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         body.notionDatabaseId = extractNotionDatabaseId(body.notionDatabaseId);
       }
       const config = await storage.upsertIntegrationsConfig(userId, body);
-      res.json({ success: true, hasYoutube: !!(config.youtubeApiKey && config.youtubeChannelId), hasNotion: !!(config.notionToken && config.notionDatabaseId) });
+      res.json({
+        success: true,
+        hasYoutube: !!(config.youtubeApiKey && config.youtubeChannelId),
+        hasNotion: !!(config.notionToken && config.notionDatabaseId),
+        hasSmtp: !!(config.smtpPassword || process.env.EMAIL_PASSWORD || process.env.EMAIL_APP_PASSWORD),
+      });
     } catch (error) {
       res.status(500).json({ error: "Failed to save integrations config" });
+    }
+  });
+
+  // TEST email endpoint
+  app.post("/api/integrations/email/test", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const result = await sendEmail({
+        to: req.body.to || "c@saca.technology",
+        subject: "✨ Prueba de envío desde Saca Tech",
+        htmlBody: `<div style="font-family: sans-serif; padding: 20px;">
+          <h2>✅ ¡Servidor SMTP de Gmail configurado correctamente!</h2>
+          <p>Este correo de prueba confirma que la integración SMTP de <strong>c@saca.technology</strong> está enviando correos reales vía Gmail.</p>
+        </div>`,
+        userId,
+      });
+
+      if (result.success) {
+        res.json({ success: true, message: "Correo de prueba enviado correctamente" });
+      } else {
+        res.status(400).json({ error: result.error });
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Error al probar el envío de correo" });
     }
   });
 

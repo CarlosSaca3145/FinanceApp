@@ -193,6 +193,8 @@ export const integrationsConfig = pgTable("integrations_config", {
   notionDateProperty: text("notion_date_property").default("Date"),       // Notion property name for target date
   notionStatusProperty: text("notion_status_property").default("Status"), // Notion property name for status
   notionNicheProperty: text("notion_niche_property").default("Niche"),   // Notion property name for niche
+  smtpEmail: text("smtp_email").default("c@saca.technology"),
+  smtpPassword: text("smtp_password"),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
 
