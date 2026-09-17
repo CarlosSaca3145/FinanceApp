@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { BarChart3, Building, FileText, PlaneTakeoff, Menu, X, LogOut, Zap } from "lucide-react";
+import { BarChart3, Building, FileText, PlaneTakeoff, Menu, X, LogOut, Zap, Settings } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,6 +15,7 @@ const navigation = [
   { id: "dashboard", label: "Dashboard", icon: BarChart3, path: "/" },
   { id: "brands", label: "Brands", icon: Building, path: "/brands" },
   { id: "content", label: "Content Templates", icon: FileText, path: "/content-templates" },
+  { id: "settings", label: "Ajustes & Integraciones", icon: Settings, path: "/settings" },
 ];
 
 export function ResponsiveLayout({ activeTab, children }: ResponsiveLayoutProps) {

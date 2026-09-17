@@ -7,6 +7,7 @@ import { ResponsiveLayout } from "@/components/layout/responsive-layout";
 import { Dashboard } from "@/pages/dashboard";
 import { Brands } from "@/pages/brands";
 import { ContentTemplates } from "@/pages/content-templates";
+import { SettingsPage } from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "./hooks/useAuth";
 import Landing from "./pages/landing";
@@ -35,6 +36,7 @@ function Router() {
   const getActiveTab = () => {
     if (location === "/brands") return "brands";
     if (location === "/content-templates") return "content";
+    if (location === "/settings") return "settings";
     return "dashboard";
   };
 
@@ -44,6 +46,7 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/brands" component={Brands} />
         <Route path="/content-templates" component={ContentTemplates} />
+        <Route path="/settings" component={SettingsPage} />
         <Route component={NotFound} />
       </Switch>
     </ResponsiveLayout>
