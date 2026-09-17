@@ -192,4 +192,113 @@ export class YouTubeService {
 
     return candidates[0];
   }
+
+  /**
+   * Finds the best matching YouTube video for a given Notion video title.
+   * Uses smart keyword extraction: strips common filler words and matches
+   * on product names, brands, and model numbers to find historically similar content.
+   * Returns the top match (horizontal only) with its view count as social proof.
+   */
+  static findBestMatchByTitle(
+    videos: YouTubeVideoData[],
+    notionVideoTitle: string
+  ): { match: YouTubeVideoData; score: number; matchedKeywords: string[] } | null {
+    // Filler words to ignore when matching
+    const stopWords = new Set([
+      "el", "la", "los", "las", "de", "del", "en", "y", "o", "un", "una",
+      "the", "a", "an", "of", "in", "and", "or", "for", "to", "is", "it",
+      "vs", "vs.", "versus", "con", "sin", "más", "mas", "mejor", "mejores",
+      "por", "que", "como", "review", "unboxing", "primeras", "impresiones",
+      "trucos", "secretos", "tips", "tricks", "best", "top", "new", "nuevo",
+      "nueva", "probé", "probe", "test", "testing", "tested",
+    ]);
+
+    // Extract meaningful keywords from the Notion title
+    const rawKeywords = notionVideoTitle
+      .toLowerCase()
+      .replace(/[^\w\sáéíóúñü]/g, " ")   // Remove punctuation
+      .split(/\s+/)
+      .filter(w => w.length >= 2 && !stopWords.has(w));
+
+    // Also extract multi-word product names (e.g. "iphone 18 pro max", "galaxy s26 ultra")
+    const titleLower = notionVideoTitle.toLowerCase();
+    const productPatterns = [
+      // Apple
+      /iphone\s*\d+\s*(pro\s*max|pro|plus|mini|fold|duo)?/g,
+      /ipad\s*(pro|air|mini)?\s*\d*/g,
+      /macbook\s*(pro|air)?\s*\d*/g,
+      /apple\s*watch\s*(ultra|se)?\s*\d*/g,
+      /airpods\s*(pro|max)?\s*\d*/g,
+      /ios\s*\d+/g,
+      // Samsung
+      /galaxy\s*s\d+\s*(ultra|plus|\+|fe)?/g,
+      /galaxy\s*z\s*(fold|flip)\s*\d*/g,
+      // Google
+      /pixel\s*\d+\s*(pro|a)?/g,
+      /android\s*\d+/g,
+      // Xiaomi / Others
+      /poco\s*\w+\s*(ultra|pro)?/g,
+      /redmi\s*\w+\s*(pro|ultra)?/g,
+      /nothing\s*phone\s*\d*/g,
+      /oneplus\s*\d+\s*(pro|ultra)?/g,
+    ];
+
+    const productMatches: string[] = [];
+    for (const pattern of productPatterns) {
+      const matches = Array.from(titleLower.matchAll(pattern));
+      for (const m of matches) {
+        productMatches.push(m[0].trim());
+      }
+    }
+
+    if (rawKeywords.length === 0 && productMatches.length === 0) return null;
+
+    // Only match horizontal (non-short) videos
+    const horizontalVideos = videos.filter(v => !v.isShort);
+    if (horizontalVideos.length === 0) return null;
+
+    // Score each video
+    const scored = horizontalVideos.map(v => {
+      const vTitleLow = v.title.toLowerCase();
+      const vTagsLow = (v.tags || []).join(" ").toLowerCase();
+      let score = 0;
+      const matched: string[] = [];
+
+      // Product name matches (highest weight — exact product match)
+      for (const product of productMatches) {
+        if (vTitleLow.includes(product)) {
+          score += 10;
+          matched.push(product);
+        } else if (vTagsLow.includes(product)) {
+          score += 5;
+          matched.push(product);
+        }
+      }
+
+      // Individual keyword matches
+      for (const kw of rawKeywords) {
+        if (vTitleLow.includes(kw)) {
+          score += 3;
+          if (!matched.includes(kw)) matched.push(kw);
+        } else if (vTagsLow.includes(kw)) {
+          score += 1;
+          if (!matched.includes(kw)) matched.push(kw);
+        }
+      }
+
+      return { v, score, matched };
+    });
+
+    // Sort: best score first, then by views
+    scored.sort((a, b) => b.score - a.score || b.v.viewCount - a.v.viewCount);
+
+    const best = scored[0];
+    if (!best || best.score === 0) return null;
+
+    return {
+      match: best.v,
+      score: best.score,
+      matchedKeywords: best.matched,
+    };
+  }
 }

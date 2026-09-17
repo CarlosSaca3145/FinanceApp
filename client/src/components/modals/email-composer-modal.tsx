@@ -92,6 +92,20 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
     return notionVideos[0] || null;
   }, [notionVideos, selectedNotionVideoId, brand]);
 
+  // ── YouTube match query for selected video (Social Proof) ──────────────
+  const { data: youtubeMatchData, isLoading: isMatchingYoutube } = useQuery({
+    queryKey: ["/api/integrations/youtube/match-by-title", selectedVideo?.title],
+    queryFn: async () => {
+      if (!selectedVideo?.title) return null;
+      const res = await fetch(`/api/integrations/youtube/match-by-title?title=${encodeURIComponent(selectedVideo.title)}`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: open && !!selectedVideo?.title,
+  });
+
+  const matchedYoutubeVideo = youtubeMatchData?.found ? youtubeMatchData.matchedVideo : null;
+
   // ── Mutations ─────────────────────────────────────────────────────────
   const sendEmailMutation = useMutation({
     mutationFn: sendEmailToBrand,
@@ -167,13 +181,21 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
       const days = daysUntilPublish(selectedVideo.targetDate);
       const urgency = days !== null && days <= 14 ? ` (only ${days} days until publication)` : "";
 
+      let socialProof = "";
+      if (matchedYoutubeVideo) {
+        socialProof = `
+
+📊 HISTORICAL PERFORMANCE & EXPECTED VIEWS:
+Based on our channel history, our previous video on a similar topic ("${matchedYoutubeVideo.title}") reached ${matchedYoutubeVideo.formattedViews} views (${matchedYoutubeVideo.url}), giving us strong confidence in high view performance for this video.`;
+      }
+
       videoProposalBlock = `
 
 📹 PROPOSED VIDEO FOR INTEGRATION:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Title: "${selectedVideo.title}"
 Estimated publish date: ${dateStr}${urgency}
-Current status: ${selectedVideo.status || "In production"}
+Current status: ${selectedVideo.status || "In production"}${socialProof}
 
 This video is a perfect fit for ${brandName} as it's directly aligned with your industry (${brandNiche}) and would allow a natural, organic integration of your product/service within the content.`;
     }
@@ -194,6 +216,7 @@ To give you a sense of the quality and format of our integrations, here's an exa
 
     if (templateType === "followup") {
       const videoRef = selectedVideo ? ` regarding the video "${selectedVideo.title}"` : "";
+      const proofRef = matchedYoutubeVideo ? ` (our previous video in this category hit ${matchedYoutubeVideo.formattedViews} views)` : "";
       return `Hi ${contactName},
 
 This is Carlos Saca from Saca Tech (@saca.technology).
@@ -201,7 +224,7 @@ This is Carlos Saca from Saca Tech (@saca.technology).
 I wanted to follow up on my previous message about the collaboration opportunity${videoRef} with ${brandName}.
 
 We remain very interested in featuring your product/service in our content and believe our audience is a great fit for the ${brandNiche} space.
-${selectedVideo ? `\nThe video "${selectedVideo.title}" is still available for integration and the publish date is approaching (${formatVideoDate(selectedVideo.targetDate)}).` : ""}
+${selectedVideo ? `\nThe video "${selectedVideo.title}" is still available for integration and the publish date is approaching (${formatVideoDate(selectedVideo.targetDate)})${proofRef}.` : ""}
 
 Would you have availability for a quick call or email exchange this week to discuss the details?
 
@@ -248,6 +271,7 @@ Saca Tech | @saca.technology`;
         campaign: brand.campania || null,
         templateType,
         videoContext,
+        matchedYoutubeVideo,
         referenceVideoLink: selectedVideoLink || null,
       });
 
@@ -259,7 +283,7 @@ Saca Tech | @saca.technology`;
       if (data.subject) {
         setCustomSubject(data.subject);
       }
-      toast({ title: "✨ Email Generado", description: "Email personalizado generado por IA para esta marca y vídeo" });
+      toast({ title: "✨ Email Generado", description: "Email personalizado con prueba social de views generado por IA" });
     } catch (error) {
       toast({ title: "Error", description: "Error al generar el email con IA. Usando plantilla estándar.", variant: "destructive" });
       setEditedEmailBody(generateProfessionalEmail());
@@ -354,7 +378,7 @@ Saca Tech | @saca.technology`;
     if (brand && !emailGenerated) {
       setEditedEmailBody(generateProfessionalEmail());
     }
-  }, [brand, templateType, selectedNotionVideoId, selectedVideoLink, notionVideos]);
+  }, [brand, templateType, selectedNotionVideoId, selectedVideoLink, notionVideos, matchedYoutubeVideo]);
 
   // ── Derived ───────────────────────────────────────────────────────────
   if (!brand) return null;
@@ -510,6 +534,43 @@ Saca Tech | @saca.technology`;
                             </a>
                           )}
                         </div>
+
+                        {/* YouTube Social Proof Match Card */}
+                        {isMatchingYoutube ? (
+                          <div className="mt-3 p-3 bg-muted/40 rounded-lg text-xs text-muted-foreground flex items-center gap-2 animate-pulse">
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin text-indigo-500" />
+                            Buscando match histórico en YouTube para justificar visualizaciones...
+                          </div>
+                        ) : matchedYoutubeVideo ? (
+                          <div className="mt-3 p-3.5 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-emerald-500/10 border border-amber-500/30 rounded-xl space-y-1.5 shadow-sm">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                                🔥 Match Histórico en YouTube (Justificación de Views)
+                              </span>
+                              <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] px-2.5 py-0.5 shadow-sm">
+                                {matchedYoutubeVideo.formattedViews} views
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-foreground font-semibold line-clamp-1">
+                              "{matchedYoutubeVideo.title}"
+                            </p>
+                            <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
+                              <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                                ✓ Se incluirá como justificación de views en el email para {brand.marca}
+                              </span>
+                              {matchedYoutubeVideo.url && (
+                                <a
+                                  href={matchedYoutubeVideo.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 font-medium"
+                                >
+                                  Ver vídeo <ExternalLink className="h-3 w-3" />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -597,9 +658,9 @@ Saca Tech | @saca.technology`;
                       placeholder="https://youtube.com/watch?v=..."
                       className="text-sm"
                     />
-                    {videoTemplate.videoLinks?.length > 0 && (
+                    {(videoTemplate.videoLinks?.length ?? 0) > 0 && (
                       <div className="flex flex-wrap gap-1.5">
-                        {videoTemplate.videoLinks.map((link: string, idx: number) => (
+                        {(videoTemplate.videoLinks || []).map((link: string, idx: number) => (
                           <button
                             key={idx}
                             type="button"

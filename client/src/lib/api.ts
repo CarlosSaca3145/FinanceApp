@@ -5,6 +5,7 @@ import type { Brand, ContentTemplate, FollowupTemplate, EmailLog } from "@shared
 
 export interface EmailSendRequest {
   brandId: string;
+  to?: string;
   templateType?: "general" | "followup";
   subjectOverride?: string;
   htmlOverride?: string;

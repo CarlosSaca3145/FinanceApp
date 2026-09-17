@@ -769,6 +769,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/ai/generate-smart-email", isAuthenticated, async (req: any, res) => {
+    try {
+      const {
+        brandName,
+        brandNiche,
+        contactName,
+        campaign,
+        templateType,
+        videoContext,
+        matchedYoutubeVideo,
+        referenceVideoLink,
+      } = req.body;
+
+      const result = await OpenAIService.generateSmartEmail({
+        brandName,
+        brandNiche,
+        contactName,
+        campaign,
+        templateType,
+        videoContext,
+        matchedYoutubeVideo,
+        referenceVideoLink,
+      });
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to generate smart email: " + (error as Error).message });
+    }
+  });
+
   // Import routes
   app.post("/api/import/brands", isAuthenticated, async (req: any, res) => {
     try {
@@ -1044,6 +1074,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to find best YouTube match" });
+    }
+  });
+
+  // ─── YouTube: Match by Notion Video Title (Social Proof) ──────────────────
+  app.get("/api/integrations/youtube/match-by-title", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { title } = req.query;
+      if (!title) return res.status(400).json({ error: "title is required" });
+
+      const { YouTubeService, formatViews } = await import("./services/youtube");
+      const allDbVideos = await storage.getYoutubeVideos(userId);
+      const allVideos = allDbVideos.map(v => ({
+        ...v,
+        viewCount: v.viewCount ?? 0,
+        likeCount: v.likeCount ?? 0,
+        commentCount: v.commentCount ?? 0,
+        tags: v.tags ?? [],
+        isShort: v.isShort ?? false,
+      }));
+
+      const result = YouTubeService.findBestMatchByTitle(allVideos, title as string);
+
+      if (result) {
+        res.json({
+          found: true,
+          matchedVideo: {
+            title: result.match.title,
+            url: result.match.url,
+            youtubeId: result.match.youtubeId,
+            viewCount: result.match.viewCount,
+            formattedViews: formatViews(result.match.viewCount),
+            likeCount: result.match.likeCount,
+            thumbnailUrl: result.match.thumbnailUrl,
+            publishedAt: result.match.publishedAt,
+          },
+          score: result.score,
+          matchedKeywords: result.matchedKeywords,
+        });
+      } else {
+        res.json({ found: false, matchedVideo: null, score: 0, matchedKeywords: [] });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to find matching YouTube video" });
     }
   });
 

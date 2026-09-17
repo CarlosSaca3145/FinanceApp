@@ -446,4 +446,104 @@ Respond ONLY as JSON:
       htmlBody: result.htmlBody || `<p>Hi,</p><p>I'd like to discuss a collaboration with ${brandName}.</p>`,
     };
   }
+
+  /**
+   * Generates a smart, personalized email body and subject for a specific Notion video proposal
+   * including YouTube historical views social proof to justify projected performance.
+   */
+  static async generateSmartEmail(opts: {
+    brandName: string;
+    brandNiche: string;
+    contactName?: string | null;
+    campaign?: string | null;
+    templateType?: 'general' | 'followup';
+    videoContext?: {
+      title: string;
+      targetDate?: string | Date | null;
+      status?: string | null;
+      nicho?: string | null;
+    } | null;
+    matchedYoutubeVideo?: {
+      title: string;
+      url: string;
+      viewCount: number;
+      formattedViews: string;
+    } | null;
+    referenceVideoLink?: string | null;
+  }): Promise<{ subject: string; body: string }> {
+    const {
+      brandName,
+      brandNiche,
+      contactName,
+      campaign,
+      templateType = 'general',
+      videoContext,
+      matchedYoutubeVideo,
+      referenceVideoLink,
+    } = opts;
+
+    const greeting = contactName ? `Hi ${contactName}` : `Hi ${brandName} team`;
+
+    const prompt = `You are Carlos Saca, a top tech content creator at Saca Tech (@saca.technology).
+Write a high-converting, professional, and natural email pitch in English to a brand for sponsorship.
+
+Recipient & Brand Context:
+- Greeting: "${greeting}"
+- Brand Name: ${brandName}
+- Brand Niche/Industry: ${brandNiche}
+${campaign && campaign.toLowerCase() !== 'general' ? `- Campaign: "${campaign}"` : ''}
+- Email Type: ${templateType === 'followup' ? 'Follow-up message' : 'Initial collaboration proposal'}
+
+${videoContext ? `Proposed Upcoming Video for Sponsorship:
+- Title: "${videoContext.title}"
+${videoContext.targetDate ? `- Estimated Publish Date: ${new Date(videoContext.targetDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}
+- Status: ${videoContext.status || 'In production'}
+` : ''}
+
+${matchedYoutubeVideo ? `Historical YouTube Performance (CRITICAL SOCIAL PROOF TO JUSTIFY EXPECTED VIEWS):
+- Historical Matched Video: "${matchedYoutubeVideo.title}"
+- Historical Views Achieved: ${matchedYoutubeVideo.formattedViews}
+- Video URL: ${matchedYoutubeVideo.url}
+* IMPORTANT: Explicitly cite this historical video and its ${matchedYoutubeVideo.formattedViews} views in the email to justify the view potential for the proposed video "${videoContext?.title || ''}".` : ''}
+
+${referenceVideoLink ? `Reference Video Example (Past Collaboration): ${referenceVideoLink}` : ''}
+
+Guidelines for the email:
+1. Language: ENTIRELY IN ENGLISH.
+2. Tone: Professional, confident, clear, and engaging.
+3. Structure:
+   - Paragraph 1: Friendly greeting + personalized hook about ${brandName} and its products in ${brandNiche}.
+   - Paragraph 2: Present the proposed upcoming video ("${videoContext?.title || ''}") for integration (60-90s dedicated integration segment).
+   - Paragraph 3 (Social Proof / Historical Justification): Reference our historical performance on similar content (${matchedYoutubeVideo ? `citing "${matchedYoutubeVideo.title}" with ${matchedYoutubeVideo.formattedViews} views` : 'citing past channel metrics'}) as clear evidence of expected view trajectory.
+   - Paragraph 4: Clear call to action asking if they're open to discussing details or reviewing media kit.
+4. Sign off as:
+   Best regards,
+   Carlos Saca
+   Saca Tech | @saca.technology
+
+Respond strictly in JSON format:
+{
+  "subject": "Compelling subject line",
+  "body": "Plain text body of the email with double newlines between paragraphs"
+}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-5",
+      messages: [
+        {
+          role: "system",
+          content: "You are a professional creator partnership manager. Return plain text email content with double newlines in valid JSON format.",
+        },
+        { role: "user", content: prompt },
+      ],
+      response_format: { type: "json_object" },
+      max_completion_tokens: 1200,
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    return {
+      subject: result.subject || `Collaboration Opportunity — ${brandName}`,
+      body: result.body || `Hi ${greeting},\n\nI hope this email finds you well...`,
+    };
+  }
 }
