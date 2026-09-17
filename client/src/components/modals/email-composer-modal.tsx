@@ -182,6 +182,10 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
     const brandNiche = brand.nicho || "tech";
     const campaign = brand.campania;
 
+    const campaignHeader = campaign && campaign.toLowerCase() !== "general"
+      ? `Regarding your "${campaign}" campaign, we believe there's a perfect synergy for a collaboration with your brand.`
+      : `Regarding our current campaign, we believe there's a perfect synergy for a collaboration with your brand.`;
+
     // Selected Notion video context
     let videoProposalBlock = "";
     if (selectedVideo) {
@@ -190,7 +194,7 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
         socialProof = `
 
 📊 HISTORICAL PERFORMANCE & EXPECTED VIEWS:
-Based on our channel history, our previous video on a similar topic ("${activeYoutubeMatch.title}") reached ${activeYoutubeMatch.formattedViews} views (${activeYoutubeMatch.url}), giving us strong confidence in high view performance for this video.`;
+Based on our channel history, our previous video on a similar topic ("${activeYoutubeMatch.title}") reached ${activeYoutubeMatch.formattedViews} views (${activeYoutubeMatch.url}), giving us strong confidence in a similar high view performance for this video.`;
       }
 
       videoProposalBlock = `
@@ -199,7 +203,7 @@ Based on our channel history, our previous video on a similar topic ("${activeYo
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Title: "${selectedVideo.title}"${socialProof}
 
-We are offering a dedicated 60–90 second integration in this upcoming high-reach video on our channel, presented naturally and organically, showcasing your product/service in a real-world context. This video is a perfect fit for ${brandName} as it's directly aligned with your brand and target audience.`;
+This is historically one of the highest-performing content formats on our channel. Based on our proven track record, a similar video is projected to achieve comparable reach. We are offering a dedicated 60–90 second integration in this upcoming high-reach video on our channel, presented naturally and organically, showcasing your product/service in a real-world context. This video is a perfect fit for ${brandName} as it's directly aligned with your brand and target audience.`;
     }
 
     // Reference video link
@@ -210,11 +214,6 @@ We are offering a dedicated 60–90 second integration in this upcoming high-rea
 To give you a sense of the quality and format of our integrations, here's an example from a previous collaboration:
 🔗 ${selectedVideoLink}`;
     }
-
-    // Campaign mention
-    const campaignLine = campaign && campaign.toLowerCase() !== "general"
-      ? `\nRegarding your "${campaign}" campaign, we believe there's a perfect synergy for this collaboration.\n`
-      : "";
 
     if (templateType === "followup") {
       const videoRef = selectedVideo ? ` regarding the upcoming high-reach video "${selectedVideo.title}"` : "";
@@ -239,8 +238,8 @@ Saca Tech | @saca.technology`;
 
     return `Hi ${contactName},
 
-I'm Carlos Saca, tech content creator at Saca Tech (@saca.technology). We produce high-quality content about ${brandNiche} across YouTube, Instagram, and TikTok, reaching a highly engaged audience passionate about technology and innovation.
-${campaignLine}
+${campaignHeader}
+
 I'm reaching out because I see a great collaboration opportunity between ${brandName} and our channel. Our content is closely aligned with the ${brandNiche} space and we have a very active, engaged community.${videoProposalBlock}
 
 This approach drives significantly more credibility and engagement than traditional advertising.${referenceBlock}

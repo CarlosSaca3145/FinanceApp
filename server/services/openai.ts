@@ -508,19 +508,23 @@ ${matchedYoutubeVideo ? `Historical YouTube Performance (CRITICAL SOCIAL PROOF T
 ${referenceVideoLink ? `Reference Video Example (Past Collaboration): ${referenceVideoLink}` : ''}
 
 Guidelines for the email:
-1. Language: ENTIRELY IN ENGLISH.
-2. Tone: Professional, confident, clear, and engaging.
-3. High-Reach Framing: Explicitly mention that we are offering a dedicated 60-90 second integration in an upcoming high-reach video on our channel.
+1. Language: ENTIRELY IN NATURAL, HIGH-CONVERTING ENGLISH.
+2. Tone: Professional, confident, persuasive, and clear.
+3. High-Reach & Track Record Framing: Explicitly mention that this is historically one of our highest-performing content formats, and based on our proven track record, a similar video is projected to achieve comparable reach.
 4. Clean Proposal: Do NOT include publication dates or internal Notion statuses (such as "Escritura", "Writing", etc.).
-5. Structure:
-   - Paragraph 1: Friendly greeting + personalized hook about ${brandName} and its products in ${brandNiche}.
-   - Paragraph 2: Present the proposed upcoming video ("${videoContext?.title || ''}") as a high-reach video opportunity.
-   - Paragraph 3 (Social Proof / Historical Justification): Reference our historical performance on similar content (${matchedYoutubeVideo ? `citing "${matchedYoutubeVideo.title}" with ${matchedYoutubeVideo.formattedViews} views` : 'citing past channel metrics'}) as clear evidence of expected view trajectory.
-   - Paragraph 4: Clear call to action asking if they're open to a quick call or email exchange.
-6. Sign off as:
-   Best regards,
-   Carlos Saca
-   Saca Tech | @saca.technology
+5. Exact Structure:
+   - Salutation: Hi ${greeting},
+   - Line 1: Regarding your "${campaign || 'current'}" campaign, we believe there's a perfect synergy for a collaboration with your brand.
+   - Line 2: I'm reaching out because I see a great collaboration opportunity between ${brandName} and our channel. Our content is closely aligned with the ${brandNiche} space and we have a very active, engaged community.
+   - Block 1: 📹 PROPOSED VIDEO FOR INTEGRATION (Title: "${videoContext?.title || ''}")
+   - Block 2 (if matchedYoutubeVideo): 📊 HISTORICAL PERFORMANCE & EXPECTED VIEWS (citing "${matchedYoutubeVideo?.title || ''}" with ${matchedYoutubeVideo?.formattedViews || ''} views at ${matchedYoutubeVideo?.url || ''})
+   - Paragraph 3: Explain that this is historically one of the highest-performing content formats on our channel, and based on our proven track record, a similar video is projected to achieve comparable reach. We offer a dedicated 60-90 second integration presented naturally and organically in this upcoming high-reach video.
+   - Paragraph 4: Note that this approach drives significantly more credibility and engagement than traditional advertising.
+   - Call to action: "Would you be open to a quick call or email exchange?"
+   - Sign off:
+     Best regards,
+     Carlos Saca
+     Saca Tech | @saca.technology
 
 Respond strictly in JSON format:
 {
