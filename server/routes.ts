@@ -999,12 +999,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const config = await storage.upsertIntegrationsConfig(userId, body);
       res.json({
         success: true,
-        hasYoutube: !!(config.youtubeApiKey && config.youtubeChannelId),
-        hasNotion: !!(config.notionToken && config.notionDatabaseId),
-        hasSmtp: !!(config.smtpPassword || process.env.EMAIL_PASSWORD || process.env.EMAIL_APP_PASSWORD),
+        hasYoutube: !!(config?.youtubeApiKey && config?.youtubeChannelId),
+        hasNotion: !!(config?.notionToken && config?.notionDatabaseId),
+        hasSmtp: !!(config?.smtpPassword || process.env.EMAIL_PASSWORD || process.env.EMAIL_APP_PASSWORD),
       });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to save integrations config" });
+    } catch (error: any) {
+      console.error("[INTEGRATIONS CONFIG SAVE ERROR]:", error);
+      res.status(500).json({ error: error.message || "Failed to save integrations config" });
     }
   });
 

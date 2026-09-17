@@ -756,27 +756,54 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── Integrations Config ─────────────────────────────────────────────────────
+  private dbInitPromise: Promise<void> | null = null;
+
+  async ensureColumnsExist() {
+    if (!this.dbInitPromise) {
+      this.dbInitPromise = (async () => {
+        try {
+          await this.db.execute(sql`
+            ALTER TABLE integrations_config ADD COLUMN IF NOT EXISTS smtp_email TEXT DEFAULT 'c@saca.technology';
+            ALTER TABLE integrations_config ADD COLUMN IF NOT EXISTS smtp_password TEXT;
+          `);
+        } catch (err) {
+          console.error("[DB MIGRATION ERROR]:", err);
+        }
+      })();
+    }
+    await this.dbInitPromise;
+  }
+
   async getIntegrationsConfig(userId: string): Promise<IntegrationsConfig | undefined> {
-    const result = await this.db
-      .select()
-      .from(integrationsConfig)
-      .where(eq(integrationsConfig.userId, userId));
-    return result[0];
+    await this.ensureColumnsExist();
+    try {
+      const result = await this.db
+        .select()
+        .from(integrationsConfig)
+        .where(eq(integrationsConfig.userId, userId));
+      return result[0];
+    } catch (error) {
+      console.error("[GET INTEGRATIONS CONFIG ERROR]:", error);
+      return undefined;
+    }
   }
 
   async upsertIntegrationsConfig(userId: string, config: Partial<IntegrationsConfig>): Promise<IntegrationsConfig> {
+    await this.ensureColumnsExist();
     const existing = await this.getIntegrationsConfig(userId);
     if (existing) {
       // Only update fields that are provided (don't overwrite masked "••••••••••" values)
       const updateData: Partial<IntegrationsConfig> = { updatedAt: new Date() };
       if (config.youtubeApiKey && config.youtubeApiKey !== "••••••••••") updateData.youtubeApiKey = config.youtubeApiKey;
-      if (config.youtubeChannelId) updateData.youtubeChannelId = config.youtubeChannelId;
+      if (config.youtubeChannelId !== undefined) updateData.youtubeChannelId = config.youtubeChannelId;
       if (config.notionToken && config.notionToken !== "••••••••••") updateData.notionToken = config.notionToken;
-      if (config.notionDatabaseId) updateData.notionDatabaseId = config.notionDatabaseId;
-      if (config.notionTitleProperty) updateData.notionTitleProperty = config.notionTitleProperty;
-      if (config.notionDateProperty) updateData.notionDateProperty = config.notionDateProperty;
-      if (config.notionStatusProperty) updateData.notionStatusProperty = config.notionStatusProperty;
-      if (config.notionNicheProperty) updateData.notionNicheProperty = config.notionNicheProperty;
+      if (config.notionDatabaseId !== undefined) updateData.notionDatabaseId = config.notionDatabaseId;
+      if (config.notionTitleProperty !== undefined) updateData.notionTitleProperty = config.notionTitleProperty;
+      if (config.notionDateProperty !== undefined) updateData.notionDateProperty = config.notionDateProperty;
+      if (config.notionStatusProperty !== undefined) updateData.notionStatusProperty = config.notionStatusProperty;
+      if (config.notionNicheProperty !== undefined) updateData.notionNicheProperty = config.notionNicheProperty;
+      if (config.smtpEmail !== undefined) updateData.smtpEmail = config.smtpEmail;
+      if (config.smtpPassword && config.smtpPassword !== "••••••••••") updateData.smtpPassword = config.smtpPassword;
 
       const [result] = await this.db
         .update(integrationsConfig)
@@ -785,9 +812,13 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return result;
     } else {
+      const insertData: any = { ...config, userId, updatedAt: new Date() };
+      if (insertData.smtpPassword === "••••••••••") delete insertData.smtpPassword;
+      if (insertData.youtubeApiKey === "••••••••••") delete insertData.youtubeApiKey;
+      if (insertData.notionToken === "••••••••••") delete insertData.notionToken;
       const [result] = await this.db
         .insert(integrationsConfig)
-        .values({ ...config, userId, updatedAt: new Date() })
+        .values(insertData)
         .returning();
       return result;
     }
