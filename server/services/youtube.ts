@@ -47,19 +47,27 @@ export class YouTubeService {
     this.channelId = channelId;
   }
 
-  /**
-   * Fetches the upload playlist ID for the channel.
-   */
   private async getUploadsPlaylistId(): Promise<string> {
-    const url = `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${this.channelId}&key=${this.apiKey}`;
+    let url = "";
+    if (this.channelId.startsWith("@")) {
+      url = `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&forHandle=${this.channelId.substring(1)}&key=${this.apiKey}`;
+    } else {
+      url = `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${this.channelId}&key=${this.apiKey}`;
+    }
+
     const res = await fetch(url);
     if (!res.ok) {
       const err = await res.text();
       throw new Error(`YouTube Channels API error: ${res.status} — ${err}`);
     }
     const data = await res.json() as any;
-    const playlistId = data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
-    if (!playlistId) throw new Error("Could not find uploads playlist for this channel.");
+    
+    if (!data.items || data.items.length === 0) {
+       throw new Error(`No se encontró el canal de YouTube: ${this.channelId}. Verifica que el ID o Handle sea correcto.`);
+    }
+
+    const playlistId = data.items[0]?.contentDetails?.relatedPlaylists?.uploads;
+    if (!playlistId) throw new Error("No se pudo encontrar la lista de subidas (uploads) para este canal.");
     return playlistId;
   }
 
