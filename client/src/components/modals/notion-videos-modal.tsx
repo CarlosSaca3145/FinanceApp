@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Calendar, Search, ExternalLink, Send, Tag, SlidersHorizontal, DollarSign } from "lucide-react";
 import { useLocation } from "wouter";
 import { MarkVideoSoldModal } from "./mark-video-sold-modal";
+import { formatDate } from "@/lib/date-utils";
 
 export interface NotionVideo {
   id?: string;
@@ -202,7 +203,7 @@ export function NotionVideosModal({ open, onOpenChange, onSelectVideoForBrand }:
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredVideos.map((video, idx) => {
                 const dateFormatted = video.targetDate 
-                  ? new Date(video.targetDate).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })
+                  ? formatDate(video.targetDate)
                   : "Fecha no asignada";
 
                 const isSold = video.isSold || !video.sponsorshipAvailable || (video.status && /vendido|patrocinado|sold|sponsored/i.test(video.status));

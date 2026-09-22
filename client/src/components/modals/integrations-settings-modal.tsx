@@ -22,6 +22,7 @@ import {
   Mail,
   Send,
 } from "lucide-react";
+import { formatDate } from "@/lib/date-utils";
 
 interface IntegrationsSettingsModalProps {
   open: boolean;
@@ -525,7 +526,7 @@ export function IntegrationsSettingsModal({ open, onOpenChange }: IntegrationsSe
                   ) : (
                     <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                       {(notionVideos as any[]).map((vid: any, i: number) => {
-                        const dateStr = vid.targetDate ? new Date(vid.targetDate).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" }) : "Sin fecha";
+                        const dateStr = vid.targetDate ? formatDate(vid.targetDate) : "Sin fecha";
                         return (
                           <div key={vid.id || i} className="flex items-center justify-between bg-card p-2 rounded border border-border text-xs gap-2">
                             <div className="min-w-0 flex-1">

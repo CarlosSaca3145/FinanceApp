@@ -15,6 +15,7 @@ import {
   Star, Languages, CheckSquare, Square, Bot
 } from "lucide-react";
 import type { Brand } from "@shared/schema";
+import { formatDate } from "@/lib/date-utils";
 
 interface NotionVideo {
   id?: string;
@@ -181,8 +182,7 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
 
   const formatVideoDate = (date: string | Date | null) => {
     if (!date) return "Próximamente";
-    const d = new Date(date);
-    return d.toLocaleDateString("es-ES", { month: "short", day: "numeric", year: "numeric" });
+    return formatDate(date);
   };
 
   const daysUntilPublish = (date: string | Date | null) => {

@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { Brand, ContentTemplate } from '@shared/schema';
+import { formatDate } from './date-utils';
 
 // Export brands data to Excel
 export function exportBrandsToExcel(brands: Brand[]) {
@@ -13,10 +14,10 @@ export function exportBrandsToExcel(brands: Brand[]) {
     'Nicho': brand.nicho,
     'Campaña': brand.campania || '',
     'Estado': brand.estado || 'Pending',
-    'Fecha de Envío': brand.fechaEnvio ? new Date(brand.fechaEnvio).toLocaleDateString() : '',
+    'Fecha de Envío': brand.fechaEnvio ? formatDate(brand.fechaEnvio) : '',
     'Seguimiento Modelo': brand.seguimientoModelo || '',
     'Notas': brand.notes || '',
-    'Fecha de Creación': brand.createdAt ? new Date(brand.createdAt).toLocaleDateString() : ''
+    'Fecha de Creación': brand.createdAt ? formatDate(brand.createdAt) : ''
   }));
 
   // Extract unique campaigns

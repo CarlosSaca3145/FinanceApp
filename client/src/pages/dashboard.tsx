@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { NotionVideosModal } from "@/components/modals/notion-videos-modal";
 import { MarkVideoSoldModal } from "@/components/modals/mark-video-sold-modal";
+import { formatDate, formatDateShort } from "@/lib/date-utils";
 
 export function Dashboard() {
   const [, setLocation] = useLocation();
@@ -278,7 +279,7 @@ export function Dashboard() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {notionVideos.slice(0, 4).map((vid: any, i: number) => {
-                  const dateStr = vid.targetDate ? new Date(vid.targetDate).toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : "Sin fecha";
+                  const dateStr = vid.targetDate ? formatDateShort(vid.targetDate) : "Sin fecha";
                   const isSold = vid.isSold || vid.sponsorshipAvailable === false || /vendido|patrocinado|sold|sponsored/i.test(vid.status || "");
 
                   return (
@@ -359,8 +360,8 @@ export function Dashboard() {
                           <p className="text-xs text-muted-foreground truncate">{act.recipient}</p>
                         </div>
                         <div className="flex items-center space-x-2 ml-4">
-                          <span className="text-xs text-muted-foreground">
-                            {act.sentAt ? new Date(act.sentAt).toLocaleDateString() : ""}
+                          <span className="text-xs text-muted-foreground font-mono">
+                            {act.sentAt ? formatDate(act.sentAt) : ""}
                           </span>
                           {act.opened ? (
                             <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 text-[10px]">
