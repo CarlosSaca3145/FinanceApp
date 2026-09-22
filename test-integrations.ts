@@ -24,19 +24,25 @@ async function main() {
   });
   console.log('✅ Claves actualizadas en DB.');
 
-  // 3. Test Email
-  console.log('\n📧 Probando SMTP Email...');
+  // 3. Test Email Multiple Times
+  console.log('\n📧 Probando SMTP Email 3 veces seguidas...');
   try {
-    const emailRes = await sendEmail({
-      to: 'c@saca.technology',
-      subject: 'Prueba interna desde el script',
-      htmlBody: 'Hola mundo, esto es una prueba automática',
-      userId: userId
-    });
-    if (emailRes.success) {
-      console.log('✅ Email enviado con éxito!');
-    } else {
-      console.error('❌ Error enviando email:', emailRes.error);
+    for (let i = 1; i <= 3; i++) {
+      console.log(`Enviando email ${i}...`);
+      const emailRes = await sendEmail({
+        to: 'c@saca.technology',
+        subject: `Prueba consecutiva ${i} desde el script`,
+        htmlBody: `Hola mundo, esto es una prueba automática número ${i}`,
+        userId: userId
+      });
+      if (emailRes.success) {
+        console.log(`✅ Email ${i} enviado con éxito!`);
+      } else {
+        console.error(`❌ Error enviando email ${i}:`, emailRes.error);
+      }
+      
+      // Esperar 2 segundos entre correos para simular al usuario
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
   } catch (e: any) {
     console.error('❌ Excepción enviando email:', e.message);
