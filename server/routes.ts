@@ -769,6 +769,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contactName,
         campaign,
         templateType,
+        language,
+        videos,
         videoContext,
         matchedYoutubeVideo,
         referenceVideoLink,
@@ -780,9 +782,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contactName,
         campaign,
         templateType,
-        videoContext,
-        matchedYoutubeVideo,
-        referenceVideoLink,
+        language,
+        videos: videos || (videoContext ? [{ title: videoContext }] : undefined),
+        referenceVideoLink: referenceVideoLink || (matchedYoutubeVideo ? matchedYoutubeVideo.url : null),
       });
 
       res.json(result);
@@ -1432,7 +1434,264 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ─── Manual Brand Status Override ──────────────────────────────────────────
+  app.patch("/api/brands/:id/status", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      const { estado } = req.body;
+      if (!estado) return res.status(400).json({ error: "estado is required" });
+
+      const updated = await storage.updateBrand(id, userId, { estado });
+      if (!updated) return res.status(404).json({ error: "Brand not found" });
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to update brand status: " + error.message });
+    }
+  });
+
+  // ─── Sponsorship Deals API ──────────────────────────────────────────────────
+  app.get("/api/deals", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const deals = await storage.getDeals(userId);
+      res.json(deals);
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to fetch deals" });
+    }
+  });
+
+  app.post("/api/deals", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const deal = await storage.createDeal(userId, req.body);
+      res.json(deal);
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to create deal: " + error.message });
+    }
+  });
+
+  app.put("/api/deals/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      const updated = await storage.updateDeal(id, userId, req.body);
+      if (!updated) return res.status(404).json({ error: "Deal not found" });
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to update deal" });
+    }
+  });
+
+  app.delete("/api/deals/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      const deleted = await storage.deleteDeal(id, userId);
+      res.json({ success: deleted });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to delete deal" });
+    }
+  });
+
+  // ─── Mark Video as Sold API ─────────────────────────────────────────────────
+  app.post("/api/videos/mark-sold", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const {
+        videoNotionId,
+        videoTitle,
+        brandId,
+        brandName,
+        agreedAmount,
+        deliveryDate,
+        paymentStatus,
+        paymentDate,
+        deliverables,
+        notes,
+      } = req.body;
+
+      if (!videoTitle || !brandName) {
+        return res.status(400).json({ error: "videoTitle and brandName are required" });
+      }
+
+      // 1. Create deal record
+      const deal = await storage.createDeal(userId, {
+        brandId: brandId || null,
+        brandName,
+        dealName: `Patrocinio: ${videoTitle}`,
+        source: "cold_outreach",
+        agreedAmount: agreedAmount || 0,
+        deliverables: deliverables || ["Integración 60-90s"],
+        deliveryStatus: "pending",
+        deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
+        paymentStatus: paymentStatus || "pending",
+        paymentDate: paymentDate ? new Date(paymentDate) : null,
+        paymentAmount: paymentStatus === "paid" ? agreedAmount || 0 : 0,
+        videoTitle,
+        videoNotionId: videoNotionId || null,
+        notes: notes || null,
+      });
+
+      // 2. If brandId is provided, update brand status to "Closed" / "Patrocinado"
+      if (brandId) {
+        await storage.updateBrand(brandId, userId, { estado: "Closed" });
+      }
+
+      res.json({ success: true, deal });
+    } catch (error: any) {
+      console.error("Mark sold error:", error);
+      res.status(500).json({ error: "Failed to mark video as sold: " + error.message });
+    }
+  });
+
+  // ─── Barter Products API ────────────────────────────────────────────────────
+  app.get("/api/barter-products", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const products = await storage.getBarterProducts(userId);
+      res.json(products);
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to fetch barter products" });
+    }
+  });
+
+  app.post("/api/barter-products", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const product = await storage.createBarterProduct(userId, req.body);
+      res.json(product);
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to create barter product: " + error.message });
+    }
+  });
+
+  app.put("/api/barter-products/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      const updated = await storage.updateBarterProduct(id, userId, req.body);
+      if (!updated) return res.status(404).json({ error: "Barter product not found" });
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to update barter product" });
+    }
+  });
+
+  app.delete("/api/barter-products/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      const deleted = await storage.deleteBarterProduct(id, userId);
+      res.json({ success: deleted });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to delete barter product" });
+    }
+  });
+
+  // ─── Monthly Goals API ──────────────────────────────────────────────────────
+  app.get("/api/goals/:yearMonth", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { yearMonth } = req.params;
+      const goal = await storage.getMonthlyGoal(userId, yearMonth);
+      res.json(goal || { yearMonth, targetAmount: 5000 });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to fetch monthly goal" });
+    }
+  });
+
+  app.post("/api/goals", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { yearMonth, targetAmount } = req.body;
+      const goal = await storage.upsertMonthlyGoal(userId, yearMonth, Number(targetAmount) || 5000);
+      res.json(goal);
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to save monthly goal" });
+    }
+  });
+
+  // ─── Reports Summary API (Daily, Weekly, Monthly Aggregations) ──────────────
+  app.get("/api/reports/summary", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { period = "monthly" } = req.query; // daily, weekly, monthly
+
+      const brands = await storage.getBrands(userId);
+      const emailLogs = await storage.getEmailLogs(userId);
+      const deals = await storage.getDeals(userId);
+      const barterProducts = await storage.getBarterProducts(userId);
+
+      const now = new Date();
+      let startDate = new Date();
+
+      if (period === "daily") {
+        startDate.setHours(0, 0, 0, 0);
+      } else if (period === "weekly") {
+        startDate.setDate(now.getDate() - 7);
+      } else {
+        // monthly
+        startDate.setDate(now.getDate() - 30);
+      }
+
+      // Filter logs by date range
+      const periodLogs = emailLogs.filter(log => log.sentAt && new Date(log.sentAt) >= startDate);
+      const emailsSent = periodLogs.filter(log => log.status === "sent").length;
+      const emailsOpened = periodLogs.filter(log => log.opened).length;
+
+      // Responded brands
+      const respondedBrands = brands.filter(b => b.estado === "Responded" || b.estado === "Contestado");
+      const closedBrands = brands.filter(b => b.estado === "Closed" || b.estado === "Patrocinado" || b.estado === "Cerrado");
+      const inProgressBrands = brands.filter(b => b.estado === "In Progress" || b.estado === "Negociación" || b.estado === "Interested");
+
+      // Deals calculation
+      const periodDeals = deals.filter(d => d.createdAt && new Date(d.createdAt) >= startDate);
+      const totalCashClosed = deals.reduce((acc, d) => acc + (Number(d.agreedAmount) || 0), 0);
+      const totalPaidAmount = deals.reduce((acc, d) => acc + (d.paymentStatus === "paid" ? (Number(d.agreedAmount) || 0) : 0), 0);
+      const pendingPaymentAmount = totalCashClosed - totalPaidAmount;
+
+      // Barter products calculation
+      const totalCommercialBarter = barterProducts.reduce((acc, p) => acc + (Number(p.commercialValue) || 0), 0);
+      const totalBarterSold = barterProducts.reduce((acc, p) => acc + (p.saleStatus === "sold" ? (Number(p.soldPrice) || 0) : 0), 0);
+
+      // Pending deliveries
+      const pendingDeliveries = deals.filter(d => d.deliveryStatus === "pending").map(d => ({
+        id: d.id,
+        brandName: d.brandName,
+        dealName: d.dealName,
+        deliveryDate: d.deliveryDate,
+        agreedAmount: d.agreedAmount,
+        deliverables: d.deliverables,
+        paymentStatus: d.paymentStatus,
+      }));
+
+      res.json({
+        period,
+        emailsSent,
+        emailsOpened,
+        openRate: emailsSent > 0 ? ((emailsOpened / emailsSent) * 100).toFixed(1) : "0",
+        repliesReceived: respondedBrands.length,
+        inProgressDeals: inProgressBrands.length,
+        closedDeals: closedBrands.length + deals.length,
+        totalCashClosed,
+        totalPaidAmount,
+        pendingPaymentAmount,
+        totalCommercialBarter,
+        totalBarterSold,
+        pendingDeliveries,
+        dealsList: deals,
+        barterList: barterProducts,
+      });
+    } catch (error: any) {
+      console.error("Report summary error:", error);
+      res.status(500).json({ error: "Failed to generate report summary" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
+
 

@@ -206,3 +206,81 @@ export const insertIntegrationsConfigSchema = createInsertSchema(integrationsCon
 
 export type InsertIntegrationsConfig = z.infer<typeof insertIntegrationsConfigSchema>;
 export type IntegrationsConfig = typeof integrationsConfig.$inferSelect;
+
+// ─── Sponsorship Deals & Negotiated Deliverables ──────────────────────────────
+export const deals = pgTable("deals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  brandId: varchar("brand_id").references(() => brands.id, { onDelete: 'set null' }),
+  brandName: text("brand_name").notNull(),
+  dealName: text("deal_name").notNull(),
+  source: text("source").default("cold_outreach"), // cold_outreach, inbound, agency, referral, other
+  agreedAmount: bigint("agreed_amount", { mode: "number" }).default(0), // Price in $ / €
+  deliverables: text("deliverables").array(),      // Array of deliverables
+  deliveryStatus: text("delivery_status").default("pending"), // pending, delivered
+  deliveryDate: timestamp("delivery_date"),
+  paymentStatus: text("payment_status").default("pending"),   // pending, paid
+  paymentDate: timestamp("payment_date"),
+  paymentAmount: bigint("payment_amount", { mode: "number" }).default(0),
+  videoTitle: text("video_title"),
+  videoNotionId: text("video_notion_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+export const insertDealSchema = createInsertSchema(deals).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertDeal = z.infer<typeof insertDealSchema>;
+export type Deal = typeof deals.$inferSelect;
+
+// ─── Barter Products & Trade-in Commercial Value ─────────────────────────────
+export const barterProducts = pgTable("barter_products", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  brandId: varchar("brand_id").references(() => brands.id, { onDelete: 'set null' }),
+  brandName: text("brand_name").notNull(),
+  productName: text("product_name").notNull(),
+  commercialValue: bigint("commercial_value", { mode: "number" }).default(0), // MSRP $
+  soldPrice: bigint("sold_price", { mode: "number" }).default(0),             // Resale $
+  saleStatus: text("sale_status").default("in_stock"),                       // in_stock, sold
+  receivedDate: timestamp("received_date").default(sql`now()`),
+  soldDate: timestamp("sold_date"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
+export const insertBarterProductSchema = createInsertSchema(barterProducts).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+});
+
+export type InsertBarterProduct = z.infer<typeof insertBarterProductSchema>;
+export type BarterProduct = typeof barterProducts.$inferSelect;
+
+// ─── Monthly Sponsorship Revenue Goals ──────────────────────────────────────
+export const monthlyGoals = pgTable("monthly_goals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  yearMonth: varchar("year_month").notNull(), // e.g. "2026-09"
+  targetAmount: bigint("target_amount", { mode: "number" }).default(5000), // $ goal
+  createdAt: timestamp("created_at").default(sql`now()`),
+}, (table) => [
+  unique("user_year_month_unique").on(table.userId, table.yearMonth),
+]);
+
+export const insertMonthlyGoalSchema = createInsertSchema(monthlyGoals).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+});
+
+export type InsertMonthlyGoal = z.infer<typeof insertMonthlyGoalSchema>;
+export type MonthlyGoal = typeof monthlyGoals.$inferSelect;
+

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { BarChart3, Building, FileText, PlaneTakeoff, Menu, X, LogOut, Zap, Settings } from "lucide-react";
+import { BarChart3, Building, FileText, PlaneTakeoff, Menu, X, LogOut, Zap, Settings, Briefcase } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -14,6 +14,7 @@ interface ResponsiveLayoutProps {
 const navigation = [
   { id: "dashboard", label: "Dashboard", icon: BarChart3, path: "/" },
   { id: "brands", label: "Brands", icon: Building, path: "/brands" },
+  { id: "sponsorships", label: "Patrocinios & PDF", icon: Briefcase, path: "/sponsorships" },
   { id: "content", label: "Contenido", icon: FileText, path: "/content" },
   { id: "settings", label: "Ajustes & Integraciones", icon: Settings, path: "/settings" },
 ];

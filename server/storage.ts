@@ -12,6 +12,12 @@ import {
   type YoutubeVideo,
   type NotionUpcomingVideo,
   type IntegrationsConfig,
+  type Deal,
+  type InsertDeal,
+  type BarterProduct,
+  type InsertBarterProduct,
+  type MonthlyGoal,
+  type InsertMonthlyGoal,
   users,
   brands,
   contentTemplates,
@@ -20,11 +26,14 @@ import {
   youtubeVideos,
   notionUpcomingVideos,
   integrationsConfig,
+  deals,
+  barterProducts,
+  monthlyGoals,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { eq, desc, sql, isNotNull } from "drizzle-orm";
+import { eq, desc, sql, isNotNull, and } from "drizzle-orm";
 
 // Minimal type for YouTube video data coming from the service
 import type { YouTubeVideoData } from "./services/youtube";
@@ -79,7 +88,25 @@ export interface IStorage {
   // Integrations Config
   getIntegrationsConfig(userId: string): Promise<IntegrationsConfig | undefined>;
   upsertIntegrationsConfig(userId: string, config: Partial<IntegrationsConfig>): Promise<IntegrationsConfig>;
+
+  // Deals
+  getDeals(userId: string): Promise<Deal[]>;
+  getDeal(id: string, userId: string): Promise<Deal | undefined>;
+  createDeal(userId: string, deal: InsertDeal): Promise<Deal>;
+  updateDeal(id: string, userId: string, deal: Partial<Deal>): Promise<Deal | undefined>;
+  deleteDeal(id: string, userId: string): Promise<boolean>;
+
+  // Barter Products
+  getBarterProducts(userId: string): Promise<BarterProduct[]>;
+  createBarterProduct(userId: string, product: InsertBarterProduct): Promise<BarterProduct>;
+  updateBarterProduct(id: string, userId: string, product: Partial<BarterProduct>): Promise<BarterProduct | undefined>;
+  deleteBarterProduct(id: string, userId: string): Promise<boolean>;
+
+  // Monthly Goals
+  getMonthlyGoal(userId: string, yearMonth: string): Promise<MonthlyGoal | undefined>;
+  upsertMonthlyGoal(userId: string, yearMonth: string, targetAmount: number): Promise<MonthlyGoal>;
 }
+
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
@@ -391,6 +418,23 @@ export class MemStorage implements IStorage {
   async clearNotionVideos(_userId: string): Promise<void> { throw new Error("Not implemented in MemStorage"); }
   async getIntegrationsConfig(_userId: string): Promise<IntegrationsConfig | undefined> { return undefined; }
   async upsertIntegrationsConfig(_userId: string, config: Partial<IntegrationsConfig>): Promise<IntegrationsConfig> { throw new Error("Not implemented in MemStorage"); }
+
+  // Deals
+  async getDeals(_userId: string): Promise<Deal[]> { return []; }
+  async getDeal(_id: string, _userId: string): Promise<Deal | undefined> { return undefined; }
+  async createDeal(_userId: string, _deal: InsertDeal): Promise<Deal> { throw new Error("Not implemented in MemStorage"); }
+  async updateDeal(_id: string, _userId: string, _deal: Partial<Deal>): Promise<Deal | undefined> { return undefined; }
+  async deleteDeal(_id: string, _userId: string): Promise<boolean> { return false; }
+
+  // Barter Products
+  async getBarterProducts(_userId: string): Promise<BarterProduct[]> { return []; }
+  async createBarterProduct(_userId: string, _product: InsertBarterProduct): Promise<BarterProduct> { throw new Error("Not implemented in MemStorage"); }
+  async updateBarterProduct(_id: string, _userId: string, _product: Partial<BarterProduct>): Promise<BarterProduct | undefined> { return undefined; }
+  async deleteBarterProduct(_id: string, _userId: string): Promise<boolean> { return false; }
+
+  // Monthly Goals
+  async getMonthlyGoal(_userId: string, _yearMonth: string): Promise<MonthlyGoal | undefined> { return undefined; }
+  async upsertMonthlyGoal(_userId: string, _yearMonth: string, _targetAmount: number): Promise<MonthlyGoal> { throw new Error("Not implemented in MemStorage"); }
 }
 
 // Database Storage implementation using PostgreSQL
@@ -765,6 +809,51 @@ export class DatabaseStorage implements IStorage {
           await this.db.execute(sql`
             ALTER TABLE integrations_config ADD COLUMN IF NOT EXISTS smtp_email TEXT DEFAULT 'c@saca.technology';
             ALTER TABLE integrations_config ADD COLUMN IF NOT EXISTS smtp_password TEXT;
+
+            CREATE TABLE IF NOT EXISTS deals (
+              id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              brand_id VARCHAR REFERENCES brands(id) ON DELETE SET NULL,
+              brand_name TEXT NOT NULL,
+              deal_name TEXT NOT NULL,
+              source TEXT DEFAULT 'cold_outreach',
+              agreed_amount BIGINT DEFAULT 0,
+              deliverables TEXT[],
+              delivery_status TEXT DEFAULT 'pending',
+              delivery_date TIMESTAMP,
+              payment_status TEXT DEFAULT 'pending',
+              payment_date TIMESTAMP,
+              payment_amount BIGINT DEFAULT 0,
+              video_title TEXT,
+              video_notion_id TEXT,
+              notes TEXT,
+              created_at TIMESTAMP DEFAULT now(),
+              updated_at TIMESTAMP DEFAULT now()
+            );
+
+            CREATE TABLE IF NOT EXISTS barter_products (
+              id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              brand_id VARCHAR REFERENCES brands(id) ON DELETE SET NULL,
+              brand_name TEXT NOT NULL,
+              product_name TEXT NOT NULL,
+              commercial_value BIGINT DEFAULT 0,
+              sold_price BIGINT DEFAULT 0,
+              sale_status TEXT DEFAULT 'in_stock',
+              received_date TIMESTAMP DEFAULT now(),
+              sold_date TIMESTAMP,
+              notes TEXT,
+              created_at TIMESTAMP DEFAULT now()
+            );
+
+            CREATE TABLE IF NOT EXISTS monthly_goals (
+              id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              year_month VARCHAR NOT NULL,
+              target_amount BIGINT DEFAULT 5000,
+              created_at TIMESTAMP DEFAULT now(),
+              CONSTRAINT user_year_month_unique UNIQUE(user_id, year_month)
+            );
           `);
         } catch (err) {
           console.error("[DB MIGRATION ERROR]:", err);
@@ -823,7 +912,92 @@ export class DatabaseStorage implements IStorage {
       return result;
     }
   }
+
+  // ─── Deals ──────────────────────────────────────────────────────────
+  async getDeals(userId: string): Promise<Deal[]> {
+    await this.ensureColumnsExist();
+    return this.db.select().from(deals).where(eq(deals.userId, userId)).orderBy(desc(deals.createdAt));
+  }
+
+  async getDeal(id: string, userId: string): Promise<Deal | undefined> {
+    await this.ensureColumnsExist();
+    const result = await this.db.select().from(deals).where(and(eq(deals.id, id), eq(deals.userId, userId)));
+    return result[0];
+  }
+
+  async createDeal(userId: string, insertDeal: InsertDeal): Promise<Deal> {
+    await this.ensureColumnsExist();
+    const [result] = await this.db.insert(deals).values({ ...insertDeal, userId }).returning();
+    return result;
+  }
+
+  async updateDeal(id: string, userId: string, dealUpdate: Partial<Deal>): Promise<Deal | undefined> {
+    await this.ensureColumnsExist();
+    const [result] = await this.db.update(deals)
+      .set({ ...dealUpdate, updatedAt: new Date() })
+      .where(and(eq(deals.id, id), eq(deals.userId, userId)))
+      .returning();
+    return result;
+  }
+
+  async deleteDeal(id: string, userId: string): Promise<boolean> {
+    await this.ensureColumnsExist();
+    const result = await this.db.delete(deals).where(and(eq(deals.id, id), eq(deals.userId, userId))).returning();
+    return result.length > 0;
+  }
+
+  // ─── Barter Products ────────────────────────────────────────────────
+  async getBarterProducts(userId: string): Promise<BarterProduct[]> {
+    await this.ensureColumnsExist();
+    return this.db.select().from(barterProducts).where(eq(barterProducts.userId, userId)).orderBy(desc(barterProducts.createdAt));
+  }
+
+  async createBarterProduct(userId: string, insertProduct: InsertBarterProduct): Promise<BarterProduct> {
+    await this.ensureColumnsExist();
+    const [result] = await this.db.insert(barterProducts).values({ ...insertProduct, userId }).returning();
+    return result;
+  }
+
+  async updateBarterProduct(id: string, userId: string, productUpdate: Partial<BarterProduct>): Promise<BarterProduct | undefined> {
+    await this.ensureColumnsExist();
+    const [result] = await this.db.update(barterProducts)
+      .set(productUpdate)
+      .where(and(eq(barterProducts.id, id), eq(barterProducts.userId, userId)))
+      .returning();
+    return result;
+  }
+
+  async deleteBarterProduct(id: string, userId: string): Promise<boolean> {
+    await this.ensureColumnsExist();
+    const result = await this.db.delete(barterProducts).where(and(eq(barterProducts.id, id), eq(barterProducts.userId, userId))).returning();
+    return result.length > 0;
+  }
+
+  // ─── Monthly Goals ──────────────────────────────────────────────────
+  async getMonthlyGoal(userId: string, yearMonth: string): Promise<MonthlyGoal | undefined> {
+    await this.ensureColumnsExist();
+    const result = await this.db.select().from(monthlyGoals).where(and(eq(monthlyGoals.userId, userId), eq(monthlyGoals.yearMonth, yearMonth)));
+    return result[0];
+  }
+
+  async upsertMonthlyGoal(userId: string, yearMonth: string, targetAmount: number): Promise<MonthlyGoal> {
+    await this.ensureColumnsExist();
+    const existing = await this.getMonthlyGoal(userId, yearMonth);
+    if (existing) {
+      const [updated] = await this.db.update(monthlyGoals)
+        .set({ targetAmount })
+        .where(and(eq(monthlyGoals.userId, userId), eq(monthlyGoals.yearMonth, yearMonth)))
+        .returning();
+      return updated;
+    } else {
+      const [inserted] = await this.db.insert(monthlyGoals)
+        .values({ userId, yearMonth, targetAmount })
+        .returning();
+      return inserted;
+    }
+  }
 }
 
 // Use database storage instead of memory storage
 export const storage = new DatabaseStorage();
+

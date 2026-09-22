@@ -15,6 +15,8 @@ import { Loader2 } from "lucide-react";
 
 import { ErrorBoundary } from "@/components/error-boundary";
 
+import SponsorshipsPage from "@/pages/sponsorships";
+
 function Router() {
   const [location] = useLocation();
   const { isLoading, isAuthenticated } = useAuth();
@@ -36,6 +38,7 @@ function Router() {
   const getActiveTab = () => {
     if (location === "/brands") return "brands";
     if (location === "/content") return "content";
+    if (location === "/sponsorships") return "sponsorships";
     if (location === "/settings") return "settings";
     return "dashboard";
   };
@@ -46,6 +49,7 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/brands" component={Brands} />
         <Route path="/content" component={Content} />
+        <Route path="/sponsorships" component={SponsorshipsPage} />
         <Route path="/settings" component={SettingsPage} />
         <Route component={NotFound} />
       </Switch>
