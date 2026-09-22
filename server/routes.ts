@@ -466,7 +466,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       Respond with JSON in this format: { "followup": "the generated follow-up message" }`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: prompt }
@@ -515,7 +515,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       Respond with JSON in this format: { "idea": "the generated content idea" }`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5-mini",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: prompt }

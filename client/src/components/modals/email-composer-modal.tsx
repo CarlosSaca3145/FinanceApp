@@ -132,6 +132,49 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
     return youtubeMatchData?.matchedVideo || matchesList[0] || null;
   }, [selectedYoutubeId, youtubeMatchData]);
 
+  // ── YouTube videos query for social proof integration ──────────────────
+  const { data: youtubeVideos = [] } = useQuery<any[]>({
+    queryKey: ["/api/integrations/youtube/videos"],
+    queryFn: async () => {
+      const res = await fetch("/api/integrations/youtube/videos", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: open,
+  });
+
+  // Helper to resolve YouTube URL and view metrics for a video title (NEVER NOTION)
+  const getYoutubeProofForVideo = (videoTitle: string) => {
+    if (!videoTitle) return { url: null, views: "alto alcance de" };
+    const titleLower = videoTitle.toLowerCase();
+
+    // 1. Try exact or partial match in YouTube db videos
+    const match = youtubeVideos.find((yt: any) =>
+      yt.title.toLowerCase().includes(titleLower) || titleLower.includes(yt.title.toLowerCase())
+    );
+    if (match) {
+      const url = match.url || (match.youtubeId ? `https://www.youtube.com/watch?v=${match.youtubeId}` : null);
+      const views = match.viewCount 
+        ? (match.viewCount >= 1_000_000 ? `${(match.viewCount / 1_000_000).toFixed(1)}M` : `${Math.round(match.viewCount / 1000)}K`)
+        : "alto alcance de";
+      return { url, views };
+    }
+
+    // 2. Try activeYoutubeMatch
+    if (activeYoutubeMatch) {
+      const url = activeYoutubeMatch.url || (activeYoutubeMatch.youtubeId ? `https://www.youtube.com/watch?v=${activeYoutubeMatch.youtubeId}` : null);
+      const views = activeYoutubeMatch.formattedViews || "alto alcance de";
+      return { url, views };
+    }
+
+    // 3. Check if selectedVideoLink is a YouTube link
+    if (selectedVideoLink && /youtube\.com|youtu\.be/i.test(selectedVideoLink)) {
+      return { url: selectedVideoLink, views: "alto alcance de" };
+    }
+
+    return { url: null, views: "alto alcance de" };
+  };
+
   // ── Mutations ─────────────────────────────────────────────────────────
   const sendEmailMutation = useMutation({
     mutationFn: sendEmailToBrand,
@@ -210,8 +253,14 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
       }
 
       return selectedVideos.map((v) => {
-        const urlLink = v.notionUrl || (selectedVideoLink ? selectedVideoLink : null);
-        const urlText = urlLink ? `\n  🔗 Link: ${urlLink}` : "";
+        const proof = getYoutubeProofForVideo(v.title);
+        // Only use YouTube URLs, NEVER Notion page links
+        const youtubeUrl = (proof.url && /youtube\.com|youtu\.be/i.test(proof.url)) 
+          ? proof.url 
+          : (selectedVideoLink && /youtube\.com|youtu\.be/i.test(selectedVideoLink) ? selectedVideoLink : null);
+
+        const urlText = youtubeUrl ? `\n  🔗 Link: ${youtubeUrl}` : "";
+        const formattedViews = proof.views;
 
         if (lang === "en") {
           return `• 🎬 "${v.title}"${urlText}\n  (This video achieved high reach with ${formattedViews} views; we project this upcoming video on a similar topic will achieve comparable or even higher reach).`;
@@ -234,7 +283,7 @@ ${selectedVideos.length > 1 ? "The videos currently available for sponsorship ar
 
 ${buildVideoItems("en")}
 
-${selectedVideoLink ? `Here is an example from a previous integration:\n🔗 ${selectedVideoLink}\n\n` : ""}Would you be open to a quick call or email exchange to coordinate details?
+${selectedVideoLink && /youtube\.com|youtu\.be/i.test(selectedVideoLink) ? `Here is an example from a previous integration:\n🔗 ${selectedVideoLink}\n\n` : ""}Would you be open to a quick call or email exchange to coordinate details?
 
 Best regards,
 Carlos Saca
@@ -250,7 +299,7 @@ ${selectedVideos.length > 1 ? "Os vídeos disponíveis para patrocínio são:" :
 
 ${buildVideoItems("pt")}
 
-${selectedVideoLink ? `Você pode ver um exemplo de integração anterior aqui:\n🔗 ${selectedVideoLink}\n\n` : ""}Você estaria disponível para uma rápida ligação ou troca de e-mails para alinhar os detalhes?
+${selectedVideoLink && /youtube\.com|youtu\.be/i.test(selectedVideoLink) ? `Você pode ver um exemplo de integração anterior aqui:\n🔗 ${selectedVideoLink}\n\n` : ""}Você estaria disponível para uma rápida ligação ou troca de e-mails para alinhar os detalhes?
 
 Atenciosamente,
 Carlos Saca
@@ -266,7 +315,7 @@ ${selectedVideos.length > 1 ? "Die derzeit für ein Sponsoring verfügbaren Vide
 
 ${buildVideoItems("de")}
 
-${selectedVideoLink ? `Hier ist ein Beispiel einer früheren Integration:\n🔗 ${selectedVideoLink}\n\n` : ""}Wären Sie für ein kurzes Telefonat oder einen E-Mail-Austausch offen, um die Details abzustimmen?
+${selectedVideoLink && /youtube\.com|youtu\.be/i.test(selectedVideoLink) ? `Hier ist ein Beispiel einer früheren Integration:\n🔗 ${selectedVideoLink}\n\n` : ""}Wären Sie für ein kurzes Telefonat oder einen E-Mail-Austausch offen, um die Details abzustimmen?
 
 Mit freundlichen Grüßen,
 Carlos Saca
@@ -282,7 +331,7 @@ ${selectedVideos.length > 1 ? "Los videos que están disponibles son:" : "El vid
 
 ${buildVideoItems("es")}
 
-${selectedVideoLink ? `Puedes ver un ejemplo de una integración anterior aquí:\n🔗 ${selectedVideoLink}\n\n` : ""}Quedo a la espera de saber si estarías disponible para una breve llamada o responder por este medio para coordinar detalles.
+${selectedVideoLink && /youtube\.com|youtu\.be/i.test(selectedVideoLink) ? `Puedes ver un ejemplo de una integración anterior aquí:\n🔗 ${selectedVideoLink}\n\n` : ""}Quedo a la espera de saber si estarías disponible para una breve llamada o responder por este medio para coordinar detalles.
 
 Saludos cordiales,
 Carlos Saca
@@ -294,11 +343,17 @@ Saca Tech | @saca.technology`;
     if (!brand) return;
     setIsGeneratingFullEmail(true);
     try {
-      const videoList = selectedVideos.map(v => ({
-        title: v.title,
-        views: activeYoutubeMatch?.formattedViews || null,
-        url: activeYoutubeMatch?.url || null,
-      }));
+      const videoList = selectedVideos.map(v => {
+        const proof = getYoutubeProofForVideo(v.title);
+        const youtubeUrl = (proof.url && /youtube\.com|youtu\.be/i.test(proof.url)) 
+          ? proof.url 
+          : (selectedVideoLink && /youtube\.com|youtu\.be/i.test(selectedVideoLink) ? selectedVideoLink : null);
+        return {
+          title: v.title,
+          views: proof.views || null,
+          url: youtubeUrl || null,
+        };
+      });
 
       const response = await apiRequest("POST", "/api/ai/generate-smart-email", {
         brandName: brand.marca,
@@ -308,18 +363,22 @@ Saca Tech | @saca.technology`;
         templateType,
         language: emailLanguage,
         videos: videoList,
-        referenceVideoLink: selectedVideoLink || null,
+        referenceVideoLink: (selectedVideoLink && /youtube\.com|youtu\.be/i.test(selectedVideoLink)) ? selectedVideoLink : null,
       });
 
       const data = await response.json();
       if (data.body) {
-        setEditedEmailBody(data.body);
+        const cleanBody = data.body
+          .replace(/https?:\/\/app\.notion\.com\/[^\s\n]+/gi, '')
+          .replace(/^[0-9a-f]{32}\s*$/gim, '')
+          .trim();
+        setEditedEmailBody(cleanBody);
         setEmailGenerated(true);
       }
       if (data.subject) {
         setCustomSubject(data.subject);
       }
-      toast({ title: "✨ Email Generado con IA", description: "Email personalizado con prueba social de vídeos generado con éxito." });
+      toast({ title: "✨ Email Generado con IA", description: "Email personalizado con prueba social de YouTube." });
     } catch (error) {
       toast({ title: "Error", description: "Error al generar con IA. Usando modelo simplificado.", variant: "destructive" });
       setEditedEmailBody(generateSimplifiedEmail());
@@ -333,15 +392,24 @@ Saca Tech | @saca.technology`;
     if (!aiInstruction.trim() || !editedEmailBody) return;
     setIsRefiningEmail(true);
     try {
+      const cleanedInputBody = editedEmailBody
+        .replace(/https?:\/\/app\.notion\.com\/[^\s\n]+/gi, '')
+        .replace(/^[0-9a-f]{32}\s*$/gim, '')
+        .trim();
+
       const response = await apiRequest("POST", "/api/ai/refine-email", {
-        currentBody: editedEmailBody,
+        currentBody: cleanedInputBody,
         instruction: aiInstruction,
         brandName: brand?.marca,
         language: emailLanguage,
       });
       const data = await response.json();
       if (data.refinedBody) {
-        setEditedEmailBody(data.refinedBody);
+        const cleanedOutput = data.refinedBody
+          .replace(/https?:\/\/app\.notion\.com\/[^\s\n]+/gi, '')
+          .replace(/^[0-9a-f]{32}\s*$/gim, '')
+          .trim();
+        setEditedEmailBody(cleanedOutput);
         setEmailGenerated(true);
         setAiInstruction("");
         toast({ title: "✨ Redacción Actualizada", description: "Gemini ha modificado la redacción según tus indicaciones." });

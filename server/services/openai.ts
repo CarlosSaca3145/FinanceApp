@@ -42,7 +42,7 @@ Respond in JSON format with this structure:
 }`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -86,7 +86,7 @@ Respond in JSON format:
 }`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -126,7 +126,7 @@ Respond in JSON format:
 }`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -167,7 +167,7 @@ Respond in JSON format:
 }`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -227,7 +227,7 @@ Respond in JSON format:
 }`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5", // Use gpt-5 which supports JSON format
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -280,7 +280,7 @@ Respond in JSON format:
 }`
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5", // Use gpt-5 which supports JSON format
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system", 
@@ -428,7 +428,7 @@ Respond ONLY as JSON:
 }`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
