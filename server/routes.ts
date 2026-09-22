@@ -1509,6 +1509,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentStatus,
         paymentDate,
         deliverables,
+        assignedTo,
         notes,
       } = req.body;
 
@@ -1525,12 +1526,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         agreedAmount: agreedAmount || 0,
         deliverables: deliverables || ["Integración 60-90s"],
         deliveryStatus: "pending",
-        deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
+        deliveryDate: deliveryDate ? deliveryDate : null,
         paymentStatus: paymentStatus || "pending",
-        paymentDate: paymentDate ? new Date(paymentDate) : null,
+        paymentDate: paymentDate ? paymentDate : null,
         paymentAmount: paymentStatus === "paid" ? agreedAmount || 0 : 0,
         videoTitle,
         videoNotionId: videoNotionId || null,
+        assignedTo: assignedTo || null,
         notes: notes || null,
       });
 

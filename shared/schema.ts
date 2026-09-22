@@ -224,6 +224,7 @@ export const deals = pgTable("deals", {
   paymentAmount: bigint("payment_amount", { mode: "number" }).default(0),
   videoTitle: text("video_title"),
   videoNotionId: text("video_notion_id"),
+  assignedTo: text("assigned_to"),                // Person responsible for delivery (e.g. Carlos, Carlos Jr)
   notes: text("notes"),
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),

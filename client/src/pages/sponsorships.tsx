@@ -20,6 +20,20 @@ import { BarterProductModal } from "@/components/modals/barter-product-modal";
 import { generatePDFReport } from "@/lib/pdf-export";
 import type { Brand } from "@shared/schema";
 
+function formatDateDMY(dateInput: any): string {
+  if (!dateInput) return "TBD";
+  try {
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return "TBD";
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch {
+    return "TBD";
+  }
+}
+
 export default function SponsorshipsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -369,6 +383,7 @@ export default function SponsorshipsPage() {
                       <tr className="bg-muted/40 border-b border-border text-muted-foreground uppercase text-[10px] font-bold">
                         <th className="p-3">Marca / Patrocinador</th>
                         <th className="p-3">Concepto / Vídeo</th>
+                        <th className="p-3">Responsable</th>
                         <th className="p-3">Monto Acordado</th>
                         <th className="p-3">Fecha de Entrega</th>
                         <th className="p-3">Estado Entrega</th>
@@ -393,11 +408,14 @@ export default function SponsorshipsPage() {
                               <span className="text-[10px] text-muted-foreground">{d.deliverables.join(", ")}</span>
                             )}
                           </td>
+                          <td className="p-3 font-semibold text-foreground">
+                            👤 {d.assignedTo || "Carlos"}
+                          </td>
                           <td className="p-3 font-bold text-emerald-600 dark:text-emerald-400 text-sm">
                             ${(Number(d.agreedAmount) || 0).toLocaleString()}
                           </td>
-                          <td className="p-3 text-muted-foreground">
-                            {d.deliveryDate ? new Date(d.deliveryDate).toLocaleDateString("es-ES") : "TBD"}
+                          <td className="p-3 font-medium text-foreground">
+                            📅 {formatDateDMY(d.deliveryDate)}
                           </td>
                           <td className="p-3">
                             <Button

@@ -35,6 +35,7 @@ export function MarkVideoSoldModal({ open, onOpenChange, video }: MarkVideoSoldM
   );
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "paid">("pending");
   const [paymentDate, setPaymentDate] = useState<string>("");
+  const [assignedTo, setAssignedTo] = useState("Carlos");
   const [selectedDeliverables, setSelectedDeliverables] = useState<string[]>(["Integración 60-90s"]);
   const [notes, setNotes] = useState("");
 
@@ -69,10 +70,11 @@ export function MarkVideoSoldModal({ open, onOpenChange, video }: MarkVideoSoldM
         brandId: selectedBrandId !== "custom" ? selectedBrandId : null,
         brandName: bName,
         agreedAmount: Number(agreedAmount) || 0,
-        deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
+        deliveryDate: deliveryDate ? deliveryDate : null,
         paymentStatus,
-        paymentDate: paymentDate ? new Date(paymentDate) : null,
+        paymentDate: paymentDate ? paymentDate : null,
         deliverables: selectedDeliverables,
+        assignedTo: assignedTo || null,
         notes,
       });
       return res.json();
@@ -205,6 +207,17 @@ export function MarkVideoSoldModal({ open, onOpenChange, video }: MarkVideoSoldM
                 className="text-xs mt-1"
               />
             </div>
+          </div>
+
+          {/* Person Responsible */}
+          <div>
+            <Label className="text-xs font-semibold">👤 Persona Encargada de la Entrega</Label>
+            <Input
+              value={assignedTo}
+              onChange={(e) => setAssignedTo(e.target.value)}
+              placeholder="Ej: Carlos / Carlos Jr"
+              className="text-xs mt-1"
+            />
           </div>
 
           {/* Negotiated Deliverables */}

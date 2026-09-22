@@ -809,6 +809,7 @@ export class DatabaseStorage implements IStorage {
           await this.db.execute(sql`
             ALTER TABLE integrations_config ADD COLUMN IF NOT EXISTS smtp_email TEXT DEFAULT 'c@saca.technology';
             ALTER TABLE integrations_config ADD COLUMN IF NOT EXISTS smtp_password TEXT;
+            ALTER TABLE deals ADD COLUMN IF NOT EXISTS assigned_to TEXT;
 
             CREATE TABLE IF NOT EXISTS deals (
               id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -927,14 +928,58 @@ export class DatabaseStorage implements IStorage {
 
   async createDeal(userId: string, insertDeal: InsertDeal): Promise<Deal> {
     await this.ensureColumnsExist();
-    const [result] = await this.db.insert(deals).values({ ...insertDeal, userId }).returning();
+    const cleanDeal: any = { ...insertDeal, userId };
+
+    if (cleanDeal.deliveryDate) {
+      cleanDeal.deliveryDate = typeof cleanDeal.deliveryDate === 'string'
+        ? new Date(cleanDeal.deliveryDate)
+        : cleanDeal.deliveryDate;
+      if (isNaN(cleanDeal.deliveryDate.getTime())) cleanDeal.deliveryDate = null;
+    } else {
+      cleanDeal.deliveryDate = null;
+    }
+
+    if (cleanDeal.paymentDate) {
+      cleanDeal.paymentDate = typeof cleanDeal.paymentDate === 'string'
+        ? new Date(cleanDeal.paymentDate)
+        : cleanDeal.paymentDate;
+      if (isNaN(cleanDeal.paymentDate.getTime())) cleanDeal.paymentDate = null;
+    } else {
+      cleanDeal.paymentDate = null;
+    }
+
+    const [result] = await this.db.insert(deals).values(cleanDeal).returning();
     return result;
   }
 
   async updateDeal(id: string, userId: string, dealUpdate: Partial<Deal>): Promise<Deal | undefined> {
     await this.ensureColumnsExist();
+    const cleanUpdate: any = { ...dealUpdate, updatedAt: new Date() };
+
+    if ('deliveryDate' in cleanUpdate) {
+      if (cleanUpdate.deliveryDate) {
+        cleanUpdate.deliveryDate = typeof cleanUpdate.deliveryDate === 'string'
+          ? new Date(cleanUpdate.deliveryDate)
+          : cleanUpdate.deliveryDate;
+        if (isNaN(cleanUpdate.deliveryDate.getTime())) cleanUpdate.deliveryDate = null;
+      } else {
+        cleanUpdate.deliveryDate = null;
+      }
+    }
+
+    if ('paymentDate' in cleanUpdate) {
+      if (cleanUpdate.paymentDate) {
+        cleanUpdate.paymentDate = typeof cleanUpdate.paymentDate === 'string'
+          ? new Date(cleanUpdate.paymentDate)
+          : cleanUpdate.paymentDate;
+        if (isNaN(cleanUpdate.paymentDate.getTime())) cleanUpdate.paymentDate = null;
+      } else {
+        cleanUpdate.paymentDate = null;
+      }
+    }
+
     const [result] = await this.db.update(deals)
-      .set({ ...dealUpdate, updatedAt: new Date() })
+      .set(cleanUpdate)
       .where(and(eq(deals.id, id), eq(deals.userId, userId)))
       .returning();
     return result;
@@ -954,14 +999,54 @@ export class DatabaseStorage implements IStorage {
 
   async createBarterProduct(userId: string, insertProduct: InsertBarterProduct): Promise<BarterProduct> {
     await this.ensureColumnsExist();
-    const [result] = await this.db.insert(barterProducts).values({ ...insertProduct, userId }).returning();
+    const cleanProduct: any = { ...insertProduct, userId };
+
+    if (cleanProduct.receivedDate) {
+      cleanProduct.receivedDate = typeof cleanProduct.receivedDate === 'string'
+        ? new Date(cleanProduct.receivedDate)
+        : cleanProduct.receivedDate;
+      if (isNaN(cleanProduct.receivedDate.getTime())) cleanProduct.receivedDate = null;
+    }
+
+    if (cleanProduct.soldDate) {
+      cleanProduct.soldDate = typeof cleanProduct.soldDate === 'string'
+        ? new Date(cleanProduct.soldDate)
+        : cleanProduct.soldDate;
+      if (isNaN(cleanProduct.soldDate.getTime())) cleanProduct.soldDate = null;
+    }
+
+    const [result] = await this.db.insert(barterProducts).values(cleanProduct).returning();
     return result;
   }
 
   async updateBarterProduct(id: string, userId: string, productUpdate: Partial<BarterProduct>): Promise<BarterProduct | undefined> {
     await this.ensureColumnsExist();
+    const cleanUpdate: any = { ...productUpdate };
+
+    if ('receivedDate' in cleanUpdate) {
+      if (cleanUpdate.receivedDate) {
+        cleanUpdate.receivedDate = typeof cleanUpdate.receivedDate === 'string'
+          ? new Date(cleanUpdate.receivedDate)
+          : cleanUpdate.receivedDate;
+        if (isNaN(cleanUpdate.receivedDate.getTime())) cleanUpdate.receivedDate = null;
+      } else {
+        cleanUpdate.receivedDate = null;
+      }
+    }
+
+    if ('soldDate' in cleanUpdate) {
+      if (cleanUpdate.soldDate) {
+        cleanUpdate.soldDate = typeof cleanUpdate.soldDate === 'string'
+          ? new Date(cleanUpdate.soldDate)
+          : cleanUpdate.soldDate;
+        if (isNaN(cleanUpdate.soldDate.getTime())) cleanUpdate.soldDate = null;
+      } else {
+        cleanUpdate.soldDate = null;
+      }
+    }
+
     const [result] = await this.db.update(barterProducts)
-      .set(productUpdate)
+      .set(cleanUpdate)
       .where(and(eq(barterProducts.id, id), eq(barterProducts.userId, userId)))
       .returning();
     return result;

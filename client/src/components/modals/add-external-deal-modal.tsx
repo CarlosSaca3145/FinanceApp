@@ -26,6 +26,7 @@ export function AddExternalDealModal({ open, onOpenChange }: AddExternalDealModa
   const [deliveryDate, setDeliveryDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "paid">("pending");
   const [paymentDate, setPaymentDate] = useState<string>("");
+  const [assignedTo, setAssignedTo] = useState("Carlos");
   const [selectedDeliverables, setSelectedDeliverables] = useState<string[]>(["Integración 60-90s"]);
   const [notes, setNotes] = useState("");
 
@@ -52,10 +53,11 @@ export function AddExternalDealModal({ open, onOpenChange }: AddExternalDealModa
         agreedAmount: Number(agreedAmount) || 0,
         deliverables: selectedDeliverables,
         deliveryStatus: "pending",
-        deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
+        deliveryDate: deliveryDate ? deliveryDate : null,
         paymentStatus,
-        paymentDate: paymentDate ? new Date(paymentDate) : null,
+        paymentDate: paymentDate ? paymentDate : null,
         paymentAmount: paymentStatus === "paid" ? Number(agreedAmount) || 0 : 0,
+        assignedTo: assignedTo || null,
         notes: notes || null,
       });
       return res.json();
@@ -183,6 +185,17 @@ export function AddExternalDealModal({ open, onOpenChange }: AddExternalDealModa
                 className="text-xs mt-1"
               />
             </div>
+          </div>
+
+          {/* Person Responsible */}
+          <div>
+            <Label className="text-xs font-semibold">👤 Persona Encargada de la Entrega</Label>
+            <Input
+              value={assignedTo}
+              onChange={(e) => setAssignedTo(e.target.value)}
+              placeholder="Ej: Carlos / Carlos Jr"
+              className="text-xs mt-1"
+            />
           </div>
 
           {/* Deliverables */}

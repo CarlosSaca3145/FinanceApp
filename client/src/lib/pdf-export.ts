@@ -1,3 +1,17 @@
+function formatDate(dateInput: any) {
+  if (!dateInput) return "TBD";
+  try {
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return "TBD";
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch {
+    return "TBD";
+  }
+}
+
 export function generatePDFReport(reportData: any, periodTitle: string) {
   const printWindow = window.open("", "_blank");
   if (!printWindow) return;
@@ -42,7 +56,7 @@ export function generatePDFReport(reportData: any, periodTitle: string) {
         <div class="header">
           <div>
             <h1 class="title">Saca Tech — Informe de Patrocinios</h1>
-            <p class="subtitle">Reporte Ejecutivo del Departamento (${periodTitle}) | Fecha: ${new Date().toLocaleDateString('es-ES')}</p>
+            <p class="subtitle">Reporte Ejecutivo del Departamento (${periodTitle}) | Fecha: ${formatDate(new Date())}</p>
           </div>
           <div style="text-align: right;">
             <strong style="color: #4338ca; font-size: 18px;">@saca.technology</strong>
@@ -80,6 +94,7 @@ export function generatePDFReport(reportData: any, periodTitle: string) {
               <tr>
                 <th>Marca</th>
                 <th>Concepto / Entregable</th>
+                <th>Responsable</th>
                 <th>Precio ($)</th>
                 <th>Fecha Entrega</th>
                 <th>Estado Entrega</th>
@@ -91,12 +106,13 @@ export function generatePDFReport(reportData: any, periodTitle: string) {
                 <tr>
                   <td><strong>${d.brandName}</strong></td>
                   <td>${d.dealName || d.videoTitle || 'Patrocinio'}</td>
+                  <td>👤 <strong>${d.assignedTo || 'Sin asignar'}</strong></td>
                   <td><strong>$${(d.agreedAmount || 0).toLocaleString()}</strong></td>
-                  <td>${d.deliveryDate ? new Date(d.deliveryDate).toLocaleDateString('es-ES') : 'TBD'}</td>
+                  <td>${formatDate(d.deliveryDate)}</td>
                   <td>${d.deliveryStatus === 'delivered' ? '✅ Entregado' : '⏳ Pendiente'}</td>
                   <td><span class="badge ${d.paymentStatus === 'paid' ? 'badge-paid' : 'badge-pending'}">${d.paymentStatus === 'paid' ? '✅ Pagado' : '⏳ Pendiente'}</span></td>
                 </tr>
-              `).join('') || '<tr><td colspan="6" style="text-align:center; color:#94a3b8;">No hay acuerdos registrados en este período</td></tr>'}
+              `).join('') || '<tr><td colspan="7" style="text-align:center; color:#94a3b8;">No hay acuerdos registrados en este período</td></tr>'}
             </tbody>
           </table>
         </div>
