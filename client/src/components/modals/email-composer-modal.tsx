@@ -11,7 +11,8 @@ import { sendEmailToBrand, getContentTemplates, apiRequest } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import {
   Sparkles, RefreshCw, Calendar, Video, Send, ChevronRight,
-  ExternalLink, Eye, ArrowRight, Wand2, Check, Copy, Mail
+  ExternalLink, Eye, ArrowRight, Wand2, Check, Copy, Mail,
+  Star, Languages, CheckSquare, Square, Bot
 } from "lucide-react";
 import type { Brand } from "@shared/schema";
 
@@ -39,19 +40,23 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
 
   // ── Core state ────────────────────────────────────────────────────────
   const [templateType, setTemplateType] = useState<"general" | "followup">("general");
+  const [emailLanguage, setEmailLanguage] = useState<string>("es");
   const [customSubject, setCustomSubject] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [editedEmailBody, setEditedEmailBody] = useState("");
 
-  // ── Video state ───────────────────────────────────────────────────────
-  const [selectedNotionVideoId, setSelectedNotionVideoId] = useState<string>("auto");
+  // ── Multi-Video Selection State ────────────────────────────────────────
+  const [selectedNotionVideoIds, setSelectedNotionVideoIds] = useState<string[]>([]);
   const [selectedYoutubeId, setSelectedYoutubeId] = useState<string>("auto");
   const [selectedVideoLink, setSelectedVideoLink] = useState("");
 
-  // ── AI state ──────────────────────────────────────────────────────────
+  // ── AI Refinement & Templates State ─────────────────────────────────────
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
   const [isGeneratingFullEmail, setIsGeneratingFullEmail] = useState(false);
+  const [aiInstruction, setAiInstruction] = useState("");
+  const [isRefiningEmail, setIsRefiningEmail] = useState(false);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [emailGenerated, setEmailGenerated] = useState(false);
 
   // ── UI state ──────────────────────────────────────────────────────────
@@ -75,34 +80,46 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
     enabled: open && !!brand,
   });
 
-  // ── Derived: selected video ───────────────────────────────────────────
-  const selectedVideo = useMemo(() => {
-    if (!notionVideos.length) return null;
-    if (selectedNotionVideoId && selectedNotionVideoId !== "auto") {
-      return notionVideos.find(v => v.notionPageId === selectedNotionVideoId || v.id === selectedNotionVideoId) || null;
+  // Available (non-sold) videos
+  const availableVideos = useMemo(() => {
+    return notionVideos.filter(v =>
+      !v.isSold && v.sponsorshipAvailable && !(v.status && /vendido|patrocinado|sold|sponsored/i.test(v.status))
+    );
+  }, [notionVideos]);
+
+  // Derived selected videos array
+  const selectedVideos = useMemo(() => {
+    if (!availableVideos.length) return [];
+    if (selectedNotionVideoIds.length > 0) {
+      return availableVideos.filter(v =>
+        selectedNotionVideoIds.includes(v.notionPageId) || (v.id && selectedNotionVideoIds.includes(v.id))
+      );
     }
-    // Auto-select: match brand niche, or first available
+    // Default auto-select: first matching niche, or first video
     if (brand) {
       const brandNicheLower = (brand.nicho || "").toLowerCase();
-      const nicheMatch = notionVideos.find(v =>
+      const nicheMatch = availableVideos.find(v =>
         (v.nicho && v.nicho.toLowerCase().includes(brandNicheLower)) ||
         v.title.toLowerCase().includes(brandNicheLower)
       );
-      return nicheMatch || notionVideos[0] || null;
+      return nicheMatch ? [nicheMatch] : [availableVideos[0]];
     }
-    return notionVideos[0] || null;
-  }, [notionVideos, selectedNotionVideoId, brand]);
+    return [availableVideos[0]];
+  }, [availableVideos, selectedNotionVideoIds, brand]);
 
-  // ── YouTube match query for selected video (Social Proof) ──────────────
+  // Primary video for YouTube historical views match query
+  const primaryVideo = selectedVideos[0] || null;
+
+  // ── YouTube match query for social proof ─────────────────────────────
   const { data: youtubeMatchData, isLoading: isMatchingYoutube } = useQuery({
-    queryKey: ["/api/integrations/youtube/match-by-title", selectedVideo?.title],
+    queryKey: ["/api/integrations/youtube/match-by-title", primaryVideo?.title],
     queryFn: async () => {
-      if (!selectedVideo?.title) return null;
-      const res = await fetch(`/api/integrations/youtube/match-by-title?title=${encodeURIComponent(selectedVideo.title)}`, { credentials: "include" });
+      if (!primaryVideo?.title) return null;
+      const res = await fetch(`/api/integrations/youtube/match-by-title?title=${encodeURIComponent(primaryVideo.title)}`, { credentials: "include" });
       if (!res.ok) return null;
       return res.json();
     },
-    enabled: open && !!selectedVideo?.title,
+    enabled: open && !!primaryVideo?.title,
   });
 
   const activeYoutubeMatch = useMemo(() => {
@@ -128,21 +145,29 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
     },
   });
 
-  // ── Helper functions ──────────────────────────────────────────────────
-  const htmlToText = (html: string) => {
-    if (!html) return "";
-    return html
-      .replace(/<p>/g, "")
-      .replace(/<\/p>/g, "\n\n")
-      .replace(/<br\s*\/?>/g, "\n")
-      .replace(/<strong>/g, "")
-      .replace(/<\/strong>/g, "")
-      .replace(/<a[^>]* href="([^"]*)"[^>]*>.*?<\/a>/g, "$1")
-      .replace(/<[^>]*>/g, "")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
+  // ── Toggle video selection ────────────────────────────────────────────
+  const toggleVideoSelection = (videoId: string) => {
+    setEmailGenerated(false);
+    setSelectedNotionVideoIds(prev => {
+      if (prev.includes(videoId)) {
+        return prev.filter(id => id !== videoId);
+      } else {
+        return [...prev, videoId];
+      }
+    });
   };
 
+  const selectAllVideos = () => {
+    setEmailGenerated(false);
+    setSelectedNotionVideoIds(availableVideos.map(v => v.notionPageId || v.id || ""));
+  };
+
+  const clearVideoSelection = () => {
+    setEmailGenerated(false);
+    setSelectedNotionVideoIds([]);
+  };
+
+  // ── Helper functions ──────────────────────────────────────────────────
   const textToHtml = (text: string) => {
     if (!text) return "";
     return text
@@ -155,115 +180,77 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
   };
 
   const formatVideoDate = (date: string | Date | null) => {
-    if (!date) return "Coming soon";
+    if (!date) return "Próximamente";
     const d = new Date(date);
-    return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  };
-
-  const formatVideoDateShort = (date: string | Date | null) => {
-    if (!date) return "TBD";
-    return new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return d.toLocaleDateString("es-ES", { month: "short", day: "numeric", year: "numeric" });
   };
 
   const daysUntilPublish = (date: string | Date | null) => {
     if (!date) return null;
     const d = new Date(date);
     const now = new Date();
-    const diff = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return diff;
+    return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   };
 
-  // ── Generate professional email ───────────────────────────────────────
-  const generateProfessionalEmail = () => {
+  // ── Simplified Email Template Generator ───────────────────────────────
+  const generateSimplifiedEmail = () => {
     if (!brand) return "";
 
-    const contactName = brand.contacto || `${brand.marca} team`;
+    const contactName = brand.contacto || `${brand.marca}`;
     const brandName = brand.marca;
-    const brandNiche = brand.nicho || "tech";
-    const campaign = brand.campania;
+    const campaign = brand.campania && brand.campania.toLowerCase() !== "general" ? brand.campania : null;
+    const formattedViews = activeYoutubeMatch?.formattedViews || "decenas de miles de";
 
-    const campaignHeader = campaign && campaign.toLowerCase() !== "general"
-      ? `Regarding your "${campaign}" campaign, we believe there's a perfect synergy for a collaboration with your brand.`
-      : `Regarding our current campaign, we believe there's a perfect synergy for a collaboration with your brand.`;
+    if (emailLanguage === "en") {
+      const videoItems = selectedVideos.map((v) => {
+        return `• 🎬 "${v.title}"\n  (This video achieved high reach with ${formattedViews} views, so we project this upcoming video on a similar topic will achieve comparable or even higher reach).`;
+      }).join("\n\n");
 
-    // Selected Notion video context
-    let videoProposalBlock = "";
-    if (selectedVideo) {
-      let socialProof = "";
-      if (activeYoutubeMatch) {
-        socialProof = `
-
-📊 HISTORICAL PERFORMANCE & EXPECTED VIEWS:
-Based on our channel history, our previous video on a similar topic ("${activeYoutubeMatch.title}") reached ${activeYoutubeMatch.formattedViews} views (${activeYoutubeMatch.url}), giving us strong confidence in a similar high view performance for this video.`;
-      }
-
-      videoProposalBlock = `
-
-📹 PROPOSED VIDEO FOR INTEGRATION:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Title: "${selectedVideo.title}"${socialProof}
-
-This is historically one of the highest-performing content formats on our channel. Based on our proven track record, a similar video is projected to achieve comparable reach. We are offering a dedicated 60–90 second integration in this upcoming high-reach video on our channel, presented naturally and organically, showcasing your product/service in a real-world context. This video is a perfect fit for ${brandName} as it's directly aligned with your brand and target audience.`;
-    }
-
-    // Reference video link
-    let referenceBlock = "";
-    if (selectedVideoLink && selectedVideoLink !== "none") {
-      referenceBlock = `
-
-To give you a sense of the quality and format of our integrations, here's an example from a previous collaboration:
-🔗 ${selectedVideoLink}`;
-    }
-
-    if (templateType === "followup") {
-      const videoRef = selectedVideo ? ` regarding the upcoming high-reach video "${selectedVideo.title}"` : "";
-      const proofRef = activeYoutubeMatch ? ` (our previous video in this category hit ${activeYoutubeMatch.formattedViews} views)` : "";
       return `Hi ${contactName},
 
-This is Carlos Saca from Saca Tech (@saca.technology).
+${campaign ? `Regarding your "${campaign}" campaign` : "Regarding our upcoming sponsorship campaign"}, I am offering a high-impact integration in long-form YouTube content.
 
-I wanted to follow up on my previous message about the collaboration opportunity${videoRef} with ${brandName}.
+${selectedVideos.length > 1 ? "The videos currently available for sponsorship are:" : "The video currently available for sponsorship is:"}
 
-We remain very interested in featuring your product/service in our content and believe our audience is a great fit for the ${brandNiche} space.
-${selectedVideo ? `\nThe video "${selectedVideo.title}" is available for integration${proofRef}. We are offering a dedicated 60–90s integration slot in this upcoming high-reach video.` : ""}
+${videoItems || `• 🎬 "Upcoming High-Impact YouTube Video"`}
 
-Would you have availability for a quick call or email exchange this week to discuss the details?
-
-Looking forward to hearing from you.
+${selectedVideoLink ? `Here is an example from a previous integration:\n🔗 ${selectedVideoLink}\n\n` : ""}Would you be open to a quick call or email exchange to coordinate details?
 
 Best regards,
 Carlos Saca
 Saca Tech | @saca.technology`;
     }
 
-    return `Hi ${contactName},
+    // Default Spanish
+    const videoItems = selectedVideos.map((v) => {
+      return `• 🎬 "${v.title}"\n  (Este video tuvo un alto alcance de ${formattedViews} visualizaciones, por lo que entendemos que este que estoy ofreciéndote de temática similar tendrá igual o similar alcance con potencial a ser mayor).`;
+    }).join("\n\n");
 
-${campaignHeader}
+    return `Hola ${contactName},
 
-I'm reaching out because I see a great collaboration opportunity between ${brandName} and our channel. Our content is closely aligned with the ${brandNiche} space and we have a very active, engaged community.${videoProposalBlock}
+${campaign ? `Respecto a la campaña "${campaign}"` : "Respecto a la campaña"}, estoy ofreciendo una integración en un video de YouTube largo de alto impacto.
 
-This approach drives significantly more credibility and engagement than traditional advertising.${referenceBlock}
+${selectedVideos.length > 1 ? "Los videos que están disponibles son:" : "El video que está disponible es:"}
 
-Would you be open to a quick call or email exchange?
+${videoItems || `• 🎬 "Video de alto impacto de YouTube"`}
 
-Looking forward to hearing from you.
+${selectedVideoLink ? `Puedes ver un ejemplo de una integración anterior aquí:\n🔗 ${selectedVideoLink}\n\n` : ""}Quedo a la espera de saber si estarías disponible para una breve llamada o responder por este medio para coordinar detalles.
 
-Best regards,
+Saludos cordiales,
 Carlos Saca
 Saca Tech | @saca.technology`;
   };
 
-  // ── AI: Generate full email with brand + video context ────────────────
+  // ── AI: Generate full email with brand + multi-video context ──────────
   const generateAIEmail = async () => {
     if (!brand) return;
     setIsGeneratingFullEmail(true);
     try {
-      const videoContext = selectedVideo ? {
-        title: selectedVideo.title,
-        targetDate: selectedVideo.targetDate,
-        status: selectedVideo.status,
-        nicho: selectedVideo.nicho,
-      } : null;
+      const videoList = selectedVideos.map(v => ({
+        title: v.title,
+        views: activeYoutubeMatch?.formattedViews || null,
+        url: activeYoutubeMatch?.url || null,
+      }));
 
       const response = await apiRequest("POST", "/api/ai/generate-smart-email", {
         brandName: brand.marca,
@@ -271,8 +258,8 @@ Saca Tech | @saca.technology`;
         contactName: brand.contacto || null,
         campaign: brand.campania || null,
         templateType,
-        videoContext,
-        matchedYoutubeVideo: activeYoutubeMatch,
+        language: emailLanguage,
+        videos: videoList,
         referenceVideoLink: selectedVideoLink || null,
       });
 
@@ -284,21 +271,71 @@ Saca Tech | @saca.technology`;
       if (data.subject) {
         setCustomSubject(data.subject);
       }
-      toast({ title: "✨ Email Generado", description: "Email personalizado con prueba social de views generado por IA" });
+      toast({ title: "✨ Email Generado con IA", description: "Email personalizado con prueba social de vídeos generado con éxito." });
     } catch (error) {
-      toast({ title: "Error", description: "Error al generar el email con IA. Usando plantilla estándar.", variant: "destructive" });
-      setEditedEmailBody(generateProfessionalEmail());
+      toast({ title: "Error", description: "Error al generar con IA. Usando modelo simplificado.", variant: "destructive" });
+      setEditedEmailBody(generateSimplifiedEmail());
     } finally {
       setIsGeneratingFullEmail(false);
     }
   };
 
-  // ── AI: Subject suggestions ───────────────────────────────────────────
+  // ── AI: Refine / Rewrite email body with custom instructions ──────────
+  const handleRefineEmailWithAI = async () => {
+    if (!aiInstruction.trim() || !editedEmailBody) return;
+    setIsRefiningEmail(true);
+    try {
+      const response = await apiRequest("POST", "/api/ai/refine-email", {
+        currentBody: editedEmailBody,
+        instruction: aiInstruction,
+        brandName: brand?.marca,
+        language: emailLanguage,
+      });
+      const data = await response.json();
+      if (data.refinedBody) {
+        setEditedEmailBody(data.refinedBody);
+        setEmailGenerated(true);
+        setAiInstruction("");
+        toast({ title: "✨ Redacción Actualizada", description: "Gemini ha modificado la redacción según tus indicaciones." });
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Error al refinar email con Gemini", variant: "destructive" });
+    } finally {
+      setIsRefiningEmail(false);
+    }
+  };
+
+  // ── Save current email as niche default model template ────────────────
+  const handleSaveAsNicheTemplate = async () => {
+    if (!brand?.nicho || !editedEmailBody) return;
+    setIsSavingTemplate(true);
+    try {
+      const response = await apiRequest("POST", "/api/content-templates/save-for-niche", {
+        nicho: brand.nicho,
+        contenido: editedEmailBody,
+        videoLinks: selectedVideoLink ? [selectedVideoLink] : [],
+      });
+      const data = await response.json();
+      if (data.success) {
+        queryClient.invalidateQueries({ queryKey: ["/api/content-templates"] });
+        toast({
+          title: "⭐ Plantilla Modelo Guardada",
+          description: `Esta redacción ha sido guardada como plantilla modelo para el nicho "${brand.nicho}".`,
+        });
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Error al guardar plantilla modelo", variant: "destructive" });
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  };
+
+  // ── Subject suggestions ───────────────────────────────────────────────
   const generateSubjectSuggestions = async () => {
     if (!brand) return;
     setIsGeneratingSuggestions(true);
     try {
-      const videoTitle = selectedVideo?.title || null;
+      const videoTitle = selectedVideos[0]?.title || null;
       const response = await apiRequest("POST", "/api/ai/generate-subjects", {
         brandName: brand.marca,
         purpose: templateType === "followup" ? "follow-up email" : "brand collaboration outreach",
@@ -338,62 +375,42 @@ Saca Tech | @saca.technology`;
     });
   };
 
-  // ── Effects: session storage, resets, pre-fill ────────────────────────
-  useEffect(() => {
-    if (open) {
-      const stored = sessionStorage.getItem("selectedNotionVideo");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (parsed?.notionPageId) {
-            setSelectedNotionVideoId(parsed.notionPageId);
-          }
-        } catch {}
-        sessionStorage.removeItem("selectedNotionVideo");
-      }
-    }
-  }, [open]);
-
+  // ── Effects ───────────────────────────────────────────────────────────
   useEffect(() => {
     setCustomSubject("");
     setAiSuggestions([]);
     setSelectedVideoLink("");
     setEmailGenerated(false);
     setActiveStep(1);
+    setAiInstruction("");
     if (brand) {
       setRecipientEmail(brand.correo || "");
     }
   }, [brand, templateType]);
 
+  // Load custom niche template if available, else standard simplified model
   useEffect(() => {
-    if (brand && contentTemplates.length > 0) {
+    if (brand && contentTemplates.length > 0 && !emailGenerated) {
       const ct = contentTemplates.find((t: any) => t.nicho.toLowerCase() === brand.nicho.toLowerCase());
-      if (ct?.videoLinks?.[0]) {
-        setSelectedVideoLink(ct.videoLinks[0]);
+      if (ct?.contenido && ct.contenido.length > 30) {
+        setEditedEmailBody(ct.contenido);
+        if (ct.videoLinks?.[0]) setSelectedVideoLink(ct.videoLinks[0]);
+        return;
       }
     }
-  }, [brand?.nicho, contentTemplates.length]);
-
-  // Auto-generate email body when video or brand changes (but only if not AI-generated)
-  useEffect(() => {
     if (brand && !emailGenerated) {
-      setEditedEmailBody(generateProfessionalEmail());
+      setEditedEmailBody(generateSimplifiedEmail());
     }
-  }, [brand, templateType, selectedNotionVideoId, selectedVideoLink, notionVideos, activeYoutubeMatch]);
+  }, [brand, templateType, selectedNotionVideoIds, selectedVideoLink, emailLanguage, activeYoutubeMatch]);
 
-  // ── Derived ───────────────────────────────────────────────────────────
+  // ── Derived Subject ───────────────────────────────────────────────────
   if (!brand) return null;
 
   const defaultSubject = templateType === "followup"
-    ? `Follow-up: Collaboration — ${brand.marca}${selectedVideo ? ` | ${selectedVideo.title}` : ""}`
-    : `Collaboration Opportunity — ${brand.marca}${selectedVideo ? ` | ${selectedVideo.title}` : ""}`;
+    ? `Seguimiento: Propuesta de Colaboración — ${brand.marca}`
+    : `Propuesta de Integración en YouTube — ${brand.marca}`;
 
   const subject = customSubject || defaultSubject;
-
-  // Available (non-sold) videos for selection
-  const availableVideos = notionVideos.filter(v =>
-    !v.isSold && v.sponsorshipAvailable && !(v.status && /vendido|patrocinado|sold|sponsored/i.test(v.status))
-  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -401,30 +418,48 @@ Saca Tech | @saca.technology`;
 
         {/* ═══ Header ═══ */}
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border bg-gradient-to-r from-card to-indigo-500/5">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <Mail className="h-5 w-5 text-white" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <Mail className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <DialogTitle className="text-xl font-bold flex items-center gap-2 flex-wrap">
+                  Redactar Propuesta para
+                  <Badge className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 text-sm font-semibold px-2.5">
+                    {brand.marca}
+                  </Badge>
+                </DialogTitle>
+                <DialogDescription className="mt-0.5">
+                  Email simplificado de alto impacto con selección de prueba social
+                </DialogDescription>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <DialogTitle className="text-xl font-bold flex items-center gap-2 flex-wrap">
-                Redactar Propuesta para
-                <Badge className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 text-sm font-semibold px-2.5">
-                  {brand.marca}
-                </Badge>
-              </DialogTitle>
-              <DialogDescription className="mt-0.5">
-                Email de patrocinio personalizado con datos del vídeo y la marca
-              </DialogDescription>
+
+            {/* Language Selector */}
+            <div className="flex items-center gap-2">
+              <Languages className="h-4 w-4 text-indigo-500" />
+              <Select value={emailLanguage} onValueChange={(val) => { setEmailLanguage(val); setEmailGenerated(false); }}>
+                <SelectTrigger className="w-[120px] h-8 text-xs font-semibold">
+                  <SelectValue placeholder="Idioma" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="es">🇪🇸 Español</SelectItem>
+                  <SelectItem value="en">🇺🇸 English</SelectItem>
+                  <SelectItem value="pt">🇵🇹 Português</SelectItem>
+                  <SelectItem value="de">🇩🇪 Deutsch</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
           {/* ── Wizard Steps ── */}
           <div className="flex items-center gap-2 mt-4">
             {[
-              { num: 1, label: "Seleccionar Vídeo", icon: Video },
-              { num: 2, label: "Redactar Email", icon: Wand2 },
-              { num: 3, label: "Revisar y Enviar", icon: Send },
-            ].map(({ num, label, icon: Icon }, idx) => (
+              { num: 1, label: "1. Vídeos & Prueba Social", icon: Video },
+              { num: 2, label: "2. Redacción & Gemini IA", icon: Wand2 },
+              { num: 3, label: "3. Revisar y Enviar", icon: Send },
+            ].map(({ num, label, icon: Icon }) => (
               <button
                 key={num}
                 type="button"
@@ -438,8 +473,7 @@ Saca Tech | @saca.technology`;
                 }`}
               >
                 {activeStep > num ? <Check className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
-                <span className="hidden sm:inline">{label}</span>
-                <span className="sm:hidden">{num}</span>
+                <span>{label}</span>
               </button>
             ))}
           </div>
@@ -448,227 +482,143 @@ Saca Tech | @saca.technology`;
         {/* ═══ Content ═══ */}
         <div className="flex-1 overflow-y-auto">
 
-          {/* ═══ STEP 1: Video Selection ═══ */}
+          {/* ═══ STEP 1: Multi-Video & Social Proof Selection ═══ */}
           {activeStep === 1 && (
             <div className="p-6 space-y-5">
-              {/* Template type */}
-              <div className="flex items-center gap-3">
-                <Label className="text-sm font-semibold whitespace-nowrap">Tipo de Email:</Label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setTemplateType("general")}
-                    className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                      templateType === "general"
-                        ? "bg-indigo-600 text-white shadow-sm"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
-                    }`}
-                  >
-                    📩 Primera Propuesta
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTemplateType("followup")}
-                    className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                      templateType === "followup"
-                        ? "bg-indigo-600 text-white shadow-sm"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
-                    }`}
-                  >
-                    🔄 Seguimiento
-                  </button>
+              {/* Email Type */}
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                  <Label className="text-sm font-semibold whitespace-nowrap">Tipo de Email:</Label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTemplateType("general")}
+                      className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+                        templateType === "general"
+                          ? "bg-indigo-600 text-white shadow-sm"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                    >
+                      📩 Propuesta Modelo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTemplateType("followup")}
+                      className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+                        templateType === "followup"
+                          ? "bg-indigo-600 text-white shadow-sm"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                    >
+                      🔄 Seguimiento
+                    </button>
+                  </div>
                 </div>
+
+                <Badge variant="outline" className="text-xs px-2.5 py-1 border-indigo-500/30 text-indigo-600 dark:text-indigo-400">
+                  {selectedVideos.length} vídeo(s) seleccionado(s) como prueba social
+                </Badge>
               </div>
 
-              {/* Selected video preview card */}
-              {selectedVideo && (
-                <div className="bg-gradient-to-r from-indigo-500/5 via-purple-500/5 to-pink-500/5 border border-indigo-500/20 rounded-xl p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
-                      🎬 Vídeo Seleccionado para la Propuesta
-                    </Label>
-                    <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[11px]">
-                      Activo
-                    </Badge>
+              {/* YouTube Social Proof Match (Reach Proof) */}
+              {primaryVideo && (
+                <div className="p-4 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-emerald-500/10 border border-amber-500/30 rounded-xl space-y-2.5 shadow-sm">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                      🔥 Prueba Social de Visualizaciones (YouTube)
+                    </span>
+                    {activeYoutubeMatch && (
+                      <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] px-2.5 py-0.5 shadow-sm">
+                        {activeYoutubeMatch.formattedViews} views logradas
+                      </Badge>
+                    )}
                   </div>
-                  <div className="bg-card/80 backdrop-blur border border-border rounded-lg p-4">
-                    <div className="flex items-start gap-4">
-                      <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-red-500/20">
-                        <Video className="h-7 w-7 text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-foreground text-base leading-snug">{selectedVideo.title}</h4>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3.5 w-3.5 text-indigo-500" />
-                            {formatVideoDate(selectedVideo.targetDate)}
-                          </span>
-                          {daysUntilPublish(selectedVideo.targetDate) !== null && (
-                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${
-                              daysUntilPublish(selectedVideo.targetDate)! <= 7
-                                ? "border-red-500/50 text-red-600 bg-red-50 dark:bg-red-950/20"
-                                : daysUntilPublish(selectedVideo.targetDate)! <= 14
-                                ? "border-amber-500/50 text-amber-600 bg-amber-50 dark:bg-amber-950/20"
-                                : "border-emerald-500/50 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20"
+                  <p className="text-[11px] text-muted-foreground">
+                    Se citarán estas visualizaciones históricas para justificar el alcance proyectado del nuevo vídeo ofertado.
+                  </p>
+
+                  {youtubeMatchData?.matches?.length ? (
+                    <div className="flex flex-col gap-1.5 max-h-[140px] overflow-y-auto pr-1">
+                      {youtubeMatchData.matches.map((vMatch: any) => {
+                        const isSelected = activeYoutubeMatch?.youtubeId === vMatch.youtubeId;
+                        return (
+                          <button
+                            key={vMatch.youtubeId}
+                            type="button"
+                            onClick={() => { setSelectedYoutubeId(vMatch.youtubeId); setEmailGenerated(false); }}
+                            className={`text-left p-2 rounded-lg border text-xs transition-all flex items-center justify-between gap-2 ${
+                              isSelected
+                                ? "bg-amber-500/15 border-amber-500/50 text-foreground font-semibold shadow-sm ring-1 ring-amber-500/30"
+                                : "bg-card/70 border-border/70 hover:bg-amber-500/5 hover:border-amber-500/30 text-muted-foreground"
+                            }`}
+                          >
+                            <span className="truncate flex-1">
+                              {isSelected ? "✓ " : "• "}"{vMatch.title}"
+                            </span>
+                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 flex-shrink-0 ${
+                              isSelected ? "border-amber-500 text-amber-600 font-bold" : "border-border text-muted-foreground"
                             }`}>
-                              {daysUntilPublish(selectedVideo.targetDate)! <= 0
-                                ? "📢 ¡Publicación inminente!"
-                                : `⏱ En ${daysUntilPublish(selectedVideo.targetDate)} días`}
+                              {vMatch.formattedViews} views
                             </Badge>
-                          )}
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                            📝 {selectedVideo.status || "Escritura"}
-                          </Badge>
-                        </div>
-                        <div className="mt-2 flex items-center gap-2">
-                          <Badge className="bg-indigo-500/10 text-indigo-600 border-indigo-500/20 text-[10px]">
-                            📎 Se incluirá en el email
-                          </Badge>
-                          {selectedVideo.notionUrl && (
-                            <a
-                              href={selectedVideo.notionUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[10px] text-muted-foreground hover:text-indigo-500 flex items-center gap-0.5 transition-colors"
-                            >
-                              <ExternalLink className="h-3 w-3" /> Notion
-                            </a>
-                          )}
-                        </div>
-
-                        {/* YouTube Social Proof Match Selector */}
-                        {isMatchingYoutube ? (
-                          <div className="mt-3 p-3 bg-muted/40 rounded-lg text-xs text-muted-foreground flex items-center gap-2 animate-pulse">
-                            <RefreshCw className="h-3.5 w-3.5 animate-spin text-indigo-500" />
-                            Buscando matches históricos en YouTube para justificar visualizaciones...
-                          </div>
-                        ) : (youtubeMatchData?.matches?.length ?? 0) > 0 ? (
-                          <div className="mt-3 p-3.5 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-emerald-500/10 border border-amber-500/30 rounded-xl space-y-2.5 shadow-sm">
-                            <div className="flex items-center justify-between flex-wrap gap-2">
-                              <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
-                                🔥 Selecciona el Vídeo Histórico de YouTube (Prueba Social)
-                              </span>
-                              {activeYoutubeMatch && (
-                                <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] px-2.5 py-0.5 shadow-sm">
-                                  {activeYoutubeMatch.formattedViews} views
-                                </Badge>
-                              )}
-                            </div>
-
-                            {/* Options list */}
-                            <div className="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto pr-1">
-                              {youtubeMatchData.matches.map((vMatch: any) => {
-                                const isSelected = activeYoutubeMatch?.youtubeId === vMatch.youtubeId;
-                                return (
-                                  <button
-                                    key={vMatch.youtubeId}
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedYoutubeId(vMatch.youtubeId);
-                                      setEmailGenerated(false);
-                                    }}
-                                    className={`text-left p-2 rounded-lg border text-xs transition-all flex items-center justify-between gap-2 ${
-                                      isSelected
-                                        ? "bg-amber-500/15 border-amber-500/50 text-foreground font-semibold shadow-sm ring-1 ring-amber-500/30"
-                                        : "bg-card/70 border-border/70 hover:bg-amber-500/5 hover:border-amber-500/30 text-muted-foreground"
-                                    }`}
-                                  >
-                                    <span className="truncate flex-1">
-                                      {isSelected ? "✓ " : "• "}"{vMatch.title}"
-                                    </span>
-                                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 flex-shrink-0 ${
-                                      isSelected ? "border-amber-500 text-amber-600 font-bold" : "border-border text-muted-foreground"
-                                    }`}>
-                                      {vMatch.formattedViews} views
-                                    </Badge>
-                                  </button>
-                                );
-                              })}
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedYoutubeId("none");
-                                  setEmailGenerated(false);
-                                }}
-                                className={`text-left p-2 rounded-lg border text-xs transition-all ${
-                                  selectedYoutubeId === "none"
-                                    ? "bg-gray-500/15 border-gray-500/50 text-foreground font-semibold"
-                                    : "bg-card/70 border-border/70 hover:bg-muted text-muted-foreground"
-                                }`}
-                              >
-                                🚫 No incluir prueba social de YouTube
-                              </button>
-                            </div>
-
-                            {activeYoutubeMatch && (
-                              <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-amber-500/20">
-                                <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                                  ✓ Se incluirá como justificación de views en el email para {brand.marca}
-                                </span>
-                                {activeYoutubeMatch.url && (
-                                  <a
-                                    href={activeYoutubeMatch.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 font-medium"
-                                  >
-                                    Ver vídeo <ExternalLink className="h-3 w-3" />
-                                  </a>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        ) : null}
-                      </div>
+                          </button>
+                        );
+                      })}
                     </div>
-                  </div>
+                  ) : null}
                 </div>
               )}
 
-              {/* Video grid */}
+              {/* Multi-Video Selection Grid */}
               {availableVideos.length > 0 ? (
-                <div>
-                  <Label className="text-sm font-semibold mb-3 block">
-                    Selecciona el vídeo que quieres ofrecer a <span className="text-indigo-600 dark:text-indigo-400">{brand.marca}</span>
-                    <span className="text-muted-foreground font-normal ml-2">({availableVideos.length} disponibles)</span>
-                  </Label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-1">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold">
+                      Selecciona uno o varios vídeos para incluir en la propuesta:
+                    </Label>
+                    <div className="flex gap-2">
+                      <Button type="button" size="sm" variant="ghost" onClick={selectAllVideos} className="text-[11px] h-7 px-2">
+                        <CheckSquare className="h-3.5 w-3.5 mr-1" /> Seleccionar todos
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={clearVideoSelection} className="text-[11px] h-7 px-2">
+                        <Square className="h-3.5 w-3.5 mr-1" /> Limpiar
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[280px] overflow-y-auto pr-1">
                     {availableVideos.map((video) => {
-                      const isSelected = selectedVideo?.notionPageId === video.notionPageId;
+                      const vId = video.notionPageId || video.id || "";
+                      const isSelected = selectedVideos.some(v => (v.notionPageId || v.id) === vId);
                       const days = daysUntilPublish(video.targetDate);
                       return (
                         <button
-                          key={video.notionPageId || video.id}
+                          key={vId}
                           type="button"
-                          onClick={() => {
-                            setSelectedNotionVideoId(video.notionPageId || video.id || "auto");
-                            setEmailGenerated(false);
-                          }}
-                          className={`text-left p-3.5 rounded-xl border-2 transition-all duration-200 group ${
+                          onClick={() => toggleVideoSelection(vId)}
+                          className={`text-left p-3.5 rounded-xl border-2 transition-all duration-200 group relative ${
                             isSelected
-                              ? "border-indigo-500 bg-indigo-500/5 shadow-md shadow-indigo-500/10 ring-1 ring-indigo-500/20"
-                              : "border-border hover:border-indigo-500/40 hover:bg-indigo-500/5 hover:shadow-sm"
+                              ? "border-indigo-500 bg-indigo-500/5 shadow-md ring-1 ring-indigo-500/20"
+                              : "border-border hover:border-indigo-500/40 hover:bg-indigo-500/5"
                           }`}
                         >
                           <div className="flex items-start gap-3">
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-all ${
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all ${
                               isSelected
                                 ? "bg-indigo-600 text-white shadow-md"
-                                : "bg-muted group-hover:bg-indigo-500/20 text-muted-foreground group-hover:text-indigo-600"
+                                : "bg-muted text-muted-foreground group-hover:bg-indigo-500/20"
                             }`}>
-                              {isSelected ? <Check className="h-5 w-5" /> : <Video className="h-4 w-4" />}
+                              {isSelected ? <Check className="h-4 w-4" /> : <Video className="h-4 w-4" />}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h5 className={`font-semibold text-sm leading-snug line-clamp-2 transition-colors ${
+                              <h5 className={`font-semibold text-xs leading-snug line-clamp-2 ${
                                 isSelected ? "text-indigo-700 dark:text-indigo-300" : "text-foreground"
                               }`}>
                                 {video.title}
                               </h5>
-                              <div className="flex items-center gap-2 mt-1.5 text-[11px] text-muted-foreground">
+                              <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
                                 <span className="flex items-center gap-0.5">
-                                  <Calendar className="h-3 w-3" />
-                                  {formatVideoDateShort(video.targetDate)}
+                                  <Calendar className="h-3 w-3 text-indigo-500" />
+                                  {formatVideoDate(video.targetDate)}
                                 </span>
                                 {days !== null && days <= 14 && (
                                   <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-400 text-amber-600">
@@ -684,50 +634,24 @@ Saca Tech | @saca.technology`;
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground bg-muted/30 rounded-xl border border-dashed">
-                  <Video className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                  <p className="font-semibold text-foreground text-sm">No hay vídeos disponibles</p>
-                  <p className="text-xs mt-1">Sincroniza tu calendario de Notion para ver los vídeos</p>
+                <div className="text-center py-6 text-muted-foreground bg-muted/30 rounded-xl border border-dashed">
+                  <Video className="h-8 w-8 mx-auto mb-1 opacity-30" />
+                  <p className="font-semibold text-sm">No hay vídeos en estado de guión/disponibles</p>
                 </div>
               )}
 
               {/* Reference video link */}
-              {(() => {
-                const videoTemplate = contentTemplates.find(
-                  (t: any) => t.nicho.toLowerCase() === brand.nicho.toLowerCase()
-                );
-                return videoTemplate && (
-                  <div className="bg-emerald-50/50 dark:bg-emerald-950/10 p-4 rounded-xl border border-emerald-200/50 dark:border-emerald-900/50 space-y-2">
-                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
-                      🔗 Vídeo de Referencia (ejemplo de integración anterior)
-                    </Label>
-                    <Input
-                      value={selectedVideoLink}
-                      onChange={(e) => { setSelectedVideoLink(e.target.value); setEmailGenerated(false); }}
-                      placeholder="https://youtube.com/watch?v=..."
-                      className="text-sm"
-                    />
-                    {(videoTemplate.videoLinks?.length ?? 0) > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {(videoTemplate.videoLinks || []).map((link: string, idx: number) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            className={`text-[10px] border px-2 py-1 rounded-lg truncate max-w-[220px] transition-colors ${
-                              selectedVideoLink === link
-                                ? "bg-emerald-600 text-white border-emerald-600"
-                                : "bg-card hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-border"
-                            }`}
-                            onClick={() => { setSelectedVideoLink(link); setEmailGenerated(false); }}
-                          >
-                            {link.length > 30 ? `${link.substring(0, 30)}...` : link}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              <div className="bg-emerald-50/50 dark:bg-emerald-950/10 p-4 rounded-xl border border-emerald-200/50 space-y-2">
+                <Label className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                  🔗 Ejemplo de Integración Anterior (Vídeo de Referencia)
+                </Label>
+                <Input
+                  value={selectedVideoLink}
+                  onChange={(e) => { setSelectedVideoLink(e.target.value); setEmailGenerated(false); }}
+                  placeholder="https://youtube.com/watch?v=..."
+                  className="text-xs"
+                />
+              </div>
 
               {/* Next button */}
               <div className="flex justify-end pt-2">
@@ -741,46 +665,23 @@ Saca Tech | @saca.technology`;
             </div>
           )}
 
-          {/* ═══ STEP 2: Email Composition ═══ */}
+          {/* ═══ STEP 2: Email Composition & Gemini AI Refinement ═══ */}
           {activeStep === 2 && (
             <div className="p-6 space-y-5">
-              {/* Selected video summary bar */}
-              {selectedVideo && (
-                <div className="flex items-center gap-3 p-3 bg-indigo-500/5 rounded-xl border border-indigo-500/15">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0">
-                    <Video className="h-4 w-4 text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{selectedVideo.title}</p>
-                    <p className="text-[11px] text-muted-foreground">{formatVideoDate(selectedVideo.targetDate)} · {selectedVideo.status}</p>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="text-xs text-indigo-600"
-                    onClick={() => setActiveStep(1)}
-                  >
-                    Cambiar
-                  </Button>
-                </div>
-              )}
-
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Left: Controls */}
+
+                {/* Left Controls */}
                 <div className="space-y-4">
-                  {/* Recipient */}
                   <div>
                     <Label className="text-xs font-semibold mb-1 block text-muted-foreground">📧 Destinatario</Label>
                     <Input
                       value={recipientEmail}
                       onChange={(e) => setRecipientEmail(e.target.value)}
                       placeholder="email@marca.com"
-                      className="text-sm"
+                      className="text-xs"
                     />
                   </div>
 
-                  {/* Subject */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <Label className="text-xs font-semibold text-muted-foreground">📋 Asunto</Label>
@@ -790,108 +691,98 @@ Saca Tech | @saca.technology`;
                         variant="ghost"
                         onClick={generateSubjectSuggestions}
                         disabled={isGeneratingSuggestions}
-                        className="text-[11px] text-indigo-600 hover:text-indigo-700 h-7 px-2"
+                        className="text-[11px] text-indigo-600 h-6 px-2"
                       >
                         <Sparkles className="h-3 w-3 mr-1" />
-                        {isGeneratingSuggestions ? "Generando..." : "Sugerencias IA"}
+                        Sugerir Asunto
                       </Button>
                     </div>
                     <Input
                       value={customSubject}
                       onChange={(e) => setCustomSubject(e.target.value)}
                       placeholder={defaultSubject}
-                      className="text-sm"
+                      className="text-xs"
                     />
-                    {aiSuggestions.length > 0 && (
-                      <div className="mt-2 space-y-1.5">
-                        {aiSuggestions.map((s, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            className="block w-full text-left px-3 py-2 text-xs bg-indigo-50 dark:bg-indigo-950/20 hover:bg-indigo-100 dark:hover:bg-indigo-950/40 rounded-lg border border-indigo-200/50 dark:border-indigo-800/50 transition-colors"
-                            onClick={() => setCustomSubject(s)}
-                          >
-                            💡 {s}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
 
-                  {/* Brand context card */}
-                  <div className="bg-card border border-border rounded-xl p-4 space-y-2">
-                    <Label className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
-                      🏢 Contexto de la Marca
-                    </Label>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="flex items-center justify-between p-2 bg-muted/40 rounded-lg">
-                        <span className="text-muted-foreground">Marca</span>
-                        <span className="font-semibold">{brand.marca}</span>
-                      </div>
-                      <div className="flex items-center justify-between p-2 bg-muted/40 rounded-lg">
-                        <span className="text-muted-foreground">Nicho</span>
-                        <Badge variant="secondary" className="text-[10px]">{brand.nicho}</Badge>
-                      </div>
-                      {brand.contacto && (
-                        <div className="flex items-center justify-between p-2 bg-muted/40 rounded-lg">
-                          <span className="text-muted-foreground">Contacto</span>
-                          <span className="font-semibold">{brand.contacto}</span>
-                        </div>
-                      )}
-                      {brand.campania && brand.campania !== "General" && (
-                        <div className="flex items-center justify-between p-2 bg-muted/40 rounded-lg">
-                          <span className="text-muted-foreground">Campaña</span>
-                          <span className="font-semibold truncate max-w-[100px]">{brand.campania}</span>
-                        </div>
-                      )}
+                  {/* ── GEMINI AI REFINEMENT BOX ── */}
+                  <div className="bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-blue-500/10 border border-purple-500/25 rounded-xl p-4 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                        <Bot className="h-4 w-4 text-purple-600" />
+                        Pedir Cambio de Redacción a Gemini IA
+                      </Label>
+                      <Badge className="bg-purple-600 text-white text-[10px]">IA Activa</Badge>
+                    </div>
+
+                    <Textarea
+                      value={aiInstruction}
+                      onChange={(e) => setAiInstruction(e.target.value)}
+                      placeholder="Escribe los cambios que deseas (ej: 'Hazlo más persuasivo', 'Enfócate en la exclusividad', 'Tradúcelo a inglés', 'Hazlo más corto')..."
+                      className="text-xs min-h-[75px] bg-card/80 border-purple-500/20"
+                    />
+
+                    <div className="flex items-center justify-between gap-2">
+                      <Button
+                        type="button"
+                        onClick={handleRefineEmailWithAI}
+                        disabled={isRefiningEmail || !aiInstruction.trim()}
+                        className="bg-purple-600 hover:bg-purple-700 text-white text-xs gap-1.5 h-9 font-semibold flex-1 shadow-sm"
+                      >
+                        {isRefiningEmail ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+                        {isRefiningEmail ? "Refinando..." : "Refinar con Gemini IA"}
+                      </Button>
+
+                      <Button
+                        type="button"
+                        onClick={generateAIEmail}
+                        disabled={isGeneratingFullEmail}
+                        variant="outline"
+                        className="text-xs h-9 gap-1"
+                      >
+                        {isGeneratingFullEmail ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-indigo-500" />}
+                        Regenerar Todo
+                      </Button>
                     </div>
                   </div>
 
-                  {/* AI Generate button */}
+                  {/* SAVE AS NICHE MODEL TEMPLATE BUTTON */}
                   <Button
                     type="button"
-                    onClick={generateAIEmail}
-                    disabled={isGeneratingFullEmail}
-                    className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-lg shadow-purple-500/20 gap-2 h-11 font-semibold"
+                    onClick={handleSaveAsNicheTemplate}
+                    disabled={isSavingTemplate || !editedEmailBody}
+                    variant="outline"
+                    className="w-full border-amber-500/40 hover:bg-amber-500/10 text-amber-700 dark:text-amber-400 gap-2 h-10 text-xs font-bold"
                   >
-                    {isGeneratingFullEmail ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                        Generando email personalizado...
-                      </>
-                    ) : (
-                      <>
-                        <Wand2 className="h-4 w-4" />
-                        {emailGenerated ? "Regenerar Email con IA" : "✨ Generar Email con IA"}
-                      </>
-                    )}
+                    <Star className="h-4 w-4 fill-amber-500 text-amber-500" />
+                    {isSavingTemplate ? "Guardando..." : `Guardar como Plantilla Modelo para "${brand.nicho}"`}
                   </Button>
-                  <p className="text-[10px] text-muted-foreground text-center -mt-2">
-                    Genera un email profesional adaptado a {brand.marca}, su sector ({brand.nicho}) y el vídeo seleccionado
+                  <p className="text-[10px] text-muted-foreground text-center">
+                    Esta redacción se usará por defecto para todas las futuras marcas del nicho {brand.nicho}.
                   </p>
                 </div>
 
-                {/* Right: Email body editor */}
+                {/* Right: Email Text Editor */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold text-muted-foreground">✏️ Cuerpo del Email (editable)</Label>
+                    <Label className="text-xs font-semibold text-muted-foreground">✏️ Redacción del Email (editable)</Label>
                     <div className="flex items-center gap-1">
                       <Button
                         type="button"
                         size="sm"
                         variant="ghost"
-                        onClick={() => { setEditedEmailBody(generateProfessionalEmail()); setEmailGenerated(false); }}
-                        className="text-[10px] h-6 px-2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setEditedEmailBody(generateSimplifiedEmail())}
+                        className="text-[10px] h-6 px-2"
                       >
                         <RefreshCw className="h-3 w-3 mr-1" />
-                        Restaurar
+                        Restaurar Modelo
                       </Button>
                       <Button
                         type="button"
                         size="sm"
                         variant="ghost"
                         onClick={copyEmailToClipboard}
-                        className="text-[10px] h-6 px-2 text-muted-foreground hover:text-foreground"
+                        className="text-[10px] h-6 px-2"
                       >
                         {copiedToClipboard ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
                         {copiedToClipboard ? "Copiado" : "Copiar"}
@@ -901,23 +792,19 @@ Saca Tech | @saca.technology`;
                   <Textarea
                     value={editedEmailBody}
                     onChange={(e) => setEditedEmailBody(e.target.value)}
-                    className="min-h-[380px] font-sans text-sm p-4 bg-muted/20 focus:bg-card border rounded-xl resize-y leading-relaxed"
-                    placeholder="Redacta tu propuesta aquí..."
+                    className="min-h-[380px] font-sans text-xs p-4 bg-muted/20 focus:bg-card border rounded-xl resize-y leading-relaxed"
                   />
-                  <p className="text-[10px] text-muted-foreground">
-                    Puedes editar libremente el texto. Los saltos de línea se conservarán.
-                  </p>
                 </div>
               </div>
 
               {/* Navigation */}
               <div className="flex items-center justify-between pt-2">
-                <Button variant="ghost" onClick={() => setActiveStep(1)} className="text-sm gap-1">
-                  ← Volver al Vídeo
+                <Button variant="ghost" onClick={() => setActiveStep(1)} className="text-xs gap-1">
+                  ← Volver a Vídeos
                 </Button>
                 <Button
                   onClick={() => setActiveStep(3)}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 px-6 shadow-md"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs gap-2 px-6 shadow-md"
                 >
                   Revisar Email <ArrowRight className="h-4 w-4" />
                 </Button>
@@ -928,68 +815,55 @@ Saca Tech | @saca.technology`;
           {/* ═══ STEP 3: Review & Send ═══ */}
           {activeStep === 3 && (
             <div className="p-6 space-y-5">
-              {/* Summary cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Recipient card */}
                 <div className="bg-card border border-border rounded-xl p-4">
                   <p className="text-[11px] text-muted-foreground font-semibold mb-1">📧 Destinatario</p>
-                  <p className="text-sm font-semibold text-foreground truncate">{recipientEmail || "Sin email"}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{brand.marca}</p>
+                  <p className="text-xs font-semibold text-foreground truncate">{recipientEmail || "Sin email"}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{brand.marca}</p>
                 </div>
-                {/* Subject card */}
                 <div className="bg-card border border-border rounded-xl p-4">
                   <p className="text-[11px] text-muted-foreground font-semibold mb-1">📋 Asunto</p>
-                  <p className="text-sm font-semibold text-foreground line-clamp-2">{subject}</p>
+                  <p className="text-xs font-semibold text-foreground line-clamp-2">{subject}</p>
                 </div>
-                {/* Video card */}
                 <div className="bg-indigo-500/5 border border-indigo-500/20 rounded-xl p-4">
-                  <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold mb-1">🎬 Vídeo Ofrecido</p>
-                  <p className="text-sm font-semibold text-foreground line-clamp-2">{selectedVideo?.title || "Ninguno"}</p>
-                  {selectedVideo && (
-                    <p className="text-[11px] text-muted-foreground mt-0.5">{formatVideoDateShort(selectedVideo.targetDate)}</p>
-                  )}
+                  <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold mb-1">🎬 Vídeos Ofertados</p>
+                  <p className="text-xs font-semibold text-foreground">{selectedVideos.length} vídeo(s)</p>
                 </div>
               </div>
 
-              {/* Email preview */}
+              {/* Preview */}
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground mb-2 block flex items-center gap-1.5">
                   <Eye className="h-3.5 w-3.5" />
                   Vista Previa del Email
                 </Label>
-                <div className="bg-white dark:bg-gray-900 border border-border rounded-xl p-6 shadow-inner max-h-[350px] overflow-y-auto">
-                  <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed whitespace-pre-wrap font-sans text-foreground">
+                <div className="bg-white dark:bg-gray-900 border border-border rounded-xl p-6 shadow-inner max-h-[320px] overflow-y-auto">
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-xs leading-relaxed whitespace-pre-wrap font-sans text-foreground">
                     {editedEmailBody || "Sin contenido"}
                   </div>
                 </div>
               </div>
 
-              {/* Action buttons */}
+              {/* Actions */}
               <div className="flex items-center justify-between pt-2 border-t border-border">
-                <Button variant="ghost" onClick={() => setActiveStep(2)} className="text-sm gap-1">
+                <Button variant="ghost" onClick={() => setActiveStep(2)} className="text-xs gap-1">
                   ← Editar Email
                 </Button>
                 <div className="flex items-center gap-3">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={copyEmailToClipboard}
-                    className="gap-1.5"
+                    onClick={handleSaveAsNicheTemplate}
+                    disabled={isSavingTemplate}
+                    className="text-xs gap-1 border-amber-500/30 text-amber-700 dark:text-amber-400"
                   >
-                    {copiedToClipboard ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    {copiedToClipboard ? "Copiado" : "Copiar"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => onOpenChange(false)}
-                  >
-                    Cancelar
+                    <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
+                    Guardar Modelo
                   </Button>
                   <Button
                     onClick={handleSendEmail}
                     disabled={sendEmailMutation.isPending || !recipientEmail}
-                    className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-lg shadow-emerald-500/20 gap-2 px-6 h-11 font-semibold"
+                    className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-lg shadow-emerald-500/20 gap-2 px-6 h-10 font-semibold text-xs"
                   >
                     {sendEmailMutation.isPending ? (
                       <>

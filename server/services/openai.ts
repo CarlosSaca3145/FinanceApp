@@ -448,8 +448,8 @@ Respond ONLY as JSON:
   }
 
   /**
-   * Generates a smart, personalized email body and subject for a specific Notion video proposal
-   * including YouTube historical views social proof to justify projected performance.
+   * Generates a smart, personalized email body and subject for proposal
+   * including one or multiple videos and historical views social proof.
    */
   static async generateSmartEmail(opts: {
     brandName: string;
@@ -457,18 +457,12 @@ Respond ONLY as JSON:
     contactName?: string | null;
     campaign?: string | null;
     templateType?: 'general' | 'followup';
-    videoContext?: {
+    language?: string;
+    videos?: Array<{
       title: string;
-      targetDate?: string | Date | null;
-      status?: string | null;
-      nicho?: string | null;
-    } | null;
-    matchedYoutubeVideo?: {
-      title: string;
-      url: string;
-      viewCount: number;
-      formattedViews: string;
-    } | null;
+      views?: string | number | null;
+      url?: string | null;
+    }>;
     referenceVideoLink?: string | null;
   }): Promise<{ subject: string; body: string }> {
     const {
@@ -477,59 +471,41 @@ Respond ONLY as JSON:
       contactName,
       campaign,
       templateType = 'general',
-      videoContext,
-      matchedYoutubeVideo,
+      language = 'es',
+      videos = [],
       referenceVideoLink,
     } = opts;
 
-    const greeting = contactName ? `Hi ${contactName}` : `Hi ${brandName} team`;
+    const langName = language === 'en' ? 'English' : language === 'pt' ? 'Portuguese' : language === 'de' ? 'German' : 'Spanish';
 
-    const prompt = `You are Carlos Saca, a top tech content creator at Saca Tech (@saca.technology).
-Write a high-converting, professional, and natural email pitch in English to a brand for sponsorship.
+    const videosListText = videos.length > 0
+      ? videos.map((v, i) => `- "${v.title}"${v.views ? ` (${typeof v.views === 'number' ? v.views.toLocaleString() : v.views} views${v.url ? `: ${v.url}` : ''})` : ''}`).join('\n')
+      : 'General high-impact long-form video';
 
-Recipient & Brand Context:
-- Greeting: "${greeting}"
-- Brand Name: ${brandName}
-- Brand Niche/Industry: ${brandNiche}
+    const prompt = `You are Carlos Saca, creator at Saca Tech (@saca.technology).
+Write a professional sponsorship pitch email to a brand.
+
+Language: Write the ENTIRE email in ${langName}.
+
+Context:
+- Contact Name: ${contactName || brandName + ' Team'}
+- Brand: ${brandName} (${brandNiche})
 ${campaign && campaign.toLowerCase() !== 'general' ? `- Campaign: "${campaign}"` : ''}
-- Email Type: ${templateType === 'followup' ? 'Follow-up message' : 'Initial collaboration proposal'}
+- Type: ${templateType === 'followup' ? 'Follow-up email' : 'Initial proposal'}
+- Available Videos offered:
+${videosListText}
+${referenceVideoLink ? `- Reference past work link: ${referenceVideoLink}` : ''}
 
-${videoContext ? `Proposed Upcoming High-Reach Video for Sponsorship:
-- Title: "${videoContext.title}"
-(Note: Do NOT include internal Notion workflow status like "Escritura" or publish dates. Frame it as offering a dedicated 60-90s integration in an upcoming high-reach video on our channel.)
-` : ''}
-
-${matchedYoutubeVideo ? `Historical YouTube Performance (CRITICAL SOCIAL PROOF TO JUSTIFY EXPECTED VIEWS):
-- Historical Matched Video: "${matchedYoutubeVideo.title}"
-- Historical Views Achieved: ${matchedYoutubeVideo.formattedViews}
-- Video URL: ${matchedYoutubeVideo.url}
-* IMPORTANT: Explicitly cite this historical video and its ${matchedYoutubeVideo.formattedViews} views in the email to justify the high view performance for the proposed video "${videoContext?.title || ''}".` : ''}
-
-${referenceVideoLink ? `Reference Video Example (Past Collaboration): ${referenceVideoLink}` : ''}
-
-Guidelines for the email:
-1. Language: ENTIRELY IN NATURAL, HIGH-CONVERTING ENGLISH.
-2. Tone: Professional, confident, persuasive, and clear.
-3. High-Reach & Track Record Framing: Explicitly mention that this is historically one of our highest-performing content formats, and based on our proven track record, a similar video is projected to achieve comparable reach.
-4. Clean Proposal: Do NOT include publication dates or internal Notion statuses (such as "Escritura", "Writing", etc.).
-5. Exact Structure:
-   - Salutation: Hi ${greeting},
-   - Line 1: Regarding your "${campaign || 'current'}" campaign, we believe there's a perfect synergy for a collaboration with your brand.
-   - Line 2: I'm reaching out because I see a great collaboration opportunity between ${brandName} and our channel. Our content is closely aligned with the ${brandNiche} space and we have a very active, engaged community.
-   - Block 1: 📹 PROPOSED VIDEO FOR INTEGRATION (Title: "${videoContext?.title || ''}")
-   - Block 2 (if matchedYoutubeVideo): 📊 HISTORICAL PERFORMANCE & EXPECTED VIEWS (citing "${matchedYoutubeVideo?.title || ''}" with ${matchedYoutubeVideo?.formattedViews || ''} views at ${matchedYoutubeVideo?.url || ''})
-   - Paragraph 3: Explain that this is historically one of the highest-performing content formats on our channel, and based on our proven track record, a similar video is projected to achieve comparable reach. We offer a dedicated 60-90 second integration presented naturally and organically in this upcoming high-reach video.
-   - Paragraph 4: Note that this approach drives significantly more credibility and engagement than traditional advertising.
-   - Call to action: "Would you be open to a quick call or email exchange?"
-   - Sign off:
-     Best regards,
-     Carlos Saca
-     Saca Tech | @saca.technology
+Key messaging requirements:
+1. State clearly: "Hola [Name/Team]. Respecto a la campaña [Campaign], estoy ofreciendo una integración en un video de YouTube largo de alto impacto."
+2. Present the available video(s).
+3. For each video offered, frame the social proof: "Este video tuvo un alto alcance de [XXX] visualizaciones, por lo que entendemos que este que estoy ofreciéndote de temática similar tendrá igual o similar alcance con potencial a ser mayor."
+4. Include a clear call-to-action asking if they are open to a quick call or email exchange.
 
 Respond strictly in JSON format:
 {
-  "subject": "Compelling subject line",
-  "body": "Plain text body of the email with double newlines between paragraphs"
+  "subject": "Compelling subject line in ${langName}",
+  "body": "Full plain text email body in ${langName} with double newlines between paragraphs"
 }`;
 
     const response = await openai.chat.completions.create({
@@ -537,7 +513,7 @@ Respond strictly in JSON format:
       messages: [
         {
           role: "system",
-          content: "You are a professional creator partnership manager. Return plain text email content with double newlines in valid JSON format.",
+          content: `You are a professional creator partnership manager. Return plain text email content with double newlines in valid JSON format. Always write in ${langName}.`,
         },
         { role: "user", content: prompt },
       ],
@@ -547,8 +523,60 @@ Respond strictly in JSON format:
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
     return {
-      subject: result.subject || `Collaboration Opportunity — ${brandName}`,
-      body: result.body || `Hi ${greeting},\n\nI hope this email finds you well...`,
+      subject: result.subject || `Propuesta de Colaboración — ${brandName}`,
+      body: result.body || `Hola ${contactName || brandName},\n\nRespecto a la campaña de ${brandName}...`,
     };
+  }
+
+  /**
+   * Refines/rewrites an existing email body according to user custom instructions (Gemini / OpenAI prompt).
+   */
+  static async refineEmailWithAI(opts: {
+    currentBody: string;
+    instruction: string;
+    brandName?: string;
+    language?: string;
+  }): Promise<string> {
+    const { currentBody, instruction, brandName, language = 'es' } = opts;
+    const langName = language === 'en' ? 'English' : language === 'pt' ? 'Portuguese' : language === 'de' ? 'German' : 'Spanish';
+
+    const prompt = `You are an expert email editor for YouTube creator sponsorship proposals.
+Rewrite/refine the following email draft according to the user's specific instruction.
+
+Language requirement: Write the refined email ENTIRELY in ${langName}.
+
+User Instruction: "${instruction}"
+Brand Name: ${brandName || 'Target Brand'}
+
+Current Email Draft:
+"""
+${currentBody}
+"""
+
+Guidelines:
+1. Apply the user's requested changes faithfully (e.g. change tone, shorten/lengtain, emphasize specific points, fix wording, translate).
+2. Maintain professional, high-converting creator sponsorship pitch formatting with proper salutation, paragraph breaks, and signature.
+3. Return ONLY JSON with key "refinedBody".
+
+Respond in JSON format:
+{
+  "refinedBody": "The updated email body text"
+}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-5",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert email editor. Return valid JSON. Always write in ${langName}.`,
+        },
+        { role: "user", content: prompt },
+      ],
+      response_format: { type: "json_object" },
+      max_completion_tokens: 1500,
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    return result.refinedBody || currentBody;
   }
 }

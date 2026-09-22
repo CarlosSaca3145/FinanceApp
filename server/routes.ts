@@ -1343,6 +1343,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ─── AI Smart Email Generator ──────────────────────────────────────────────
+  app.post("/api/ai/generate-smart-email", isAuthenticated, async (req: any, res) => {
+    try {
+      const { brandName, brandNiche, contactName, campaign, templateType, language, videos, referenceVideoLink } = req.body;
+      const { OpenAIService } = await import("./services/openai");
+      const result = await OpenAIService.generateSmartEmail({
+        brandName,
+        brandNiche,
+        contactName,
+        campaign,
+        templateType,
+        language,
+        videos,
+        referenceVideoLink,
+      });
+      res.json(result);
+    } catch (error: any) {
+      console.error("Smart email error:", error);
+      res.status(500).json({ error: "Failed to generate email: " + error.message });
+    }
+  });
+
+  // ─── AI Refine / Rewrite Email ─────────────────────────────────────────────
+  app.post("/api/ai/refine-email", isAuthenticated, async (req: any, res) => {
+    try {
+      const { currentBody, instruction, brandName, language } = req.body;
+      if (!currentBody || !instruction) {
+        return res.status(400).json({ error: "currentBody and instruction are required" });
+      }
+      const { OpenAIService } = await import("./services/openai");
+      const refinedBody = await OpenAIService.refineEmailWithAI({
+        currentBody,
+        instruction,
+        brandName,
+        language,
+      });
+      res.json({ refinedBody });
+    } catch (error: any) {
+      console.error("Refine email error:", error);
+      res.status(500).json({ error: "Failed to refine email: " + error.message });
+    }
+  });
+
+  // ─── Save Custom Model Template for Niche ──────────────────────────────────
+  app.post("/api/content-templates/save-for-niche", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { nicho, contenido, idea, videoLinks } = req.body;
+
+      if (!nicho || !contenido) {
+        return res.status(400).json({ error: "nicho and contenido are required" });
+      }
+
+      const existingTemplates = await storage.getContentTemplates(userId);
+      const existing = existingTemplates.find(
+        (t) => t.nicho.toLowerCase() === nicho.toLowerCase()
+      );
+
+      let savedTemplate;
+      if (existing) {
+        savedTemplate = await storage.updateContentTemplate(existing.id, userId, {
+          contenido,
+          idea: idea || existing.idea,
+          videoLinks: videoLinks || existing.videoLinks,
+          updatedAt: new Date(),
+        });
+      } else {
+        savedTemplate = await storage.createContentTemplate(userId, {
+          nicho,
+          contenido,
+          idea: idea || "",
+          videoLinks: videoLinks || [],
+          videoTitles: [],
+          videoIdeas: [],
+          videoViews: [],
+          fullTemplate: null,
+          originalIdea: null,
+          proposedIdea: null,
+          views: null,
+        });
+      }
+
+      res.json({ success: true, template: savedTemplate });
+    } catch (error: any) {
+      console.error("Save niche template error:", error);
+      res.status(500).json({ error: "Failed to save template for niche: " + error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
+
