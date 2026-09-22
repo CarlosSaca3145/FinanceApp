@@ -17,6 +17,7 @@ import {
 import { MarkVideoSoldModal } from "@/components/modals/mark-video-sold-modal";
 import { AddExternalDealModal } from "@/components/modals/add-external-deal-modal";
 import { BarterProductModal } from "@/components/modals/barter-product-modal";
+import { EditDealModal } from "@/components/modals/edit-deal-modal";
 import { generatePDFReport } from "@/lib/pdf-export";
 import type { Brand } from "@shared/schema";
 
@@ -48,6 +49,9 @@ export default function SponsorshipsPage() {
   const [isAddExternalOpen, setIsAddExternalOpen] = useState(false);
   const [isBarterModalOpen, setIsBarterModalOpen] = useState(false);
   const [selectedBarterProduct, setSelectedBarterProduct] = useState<any>(null);
+
+  const [isEditDealOpen, setIsEditDealOpen] = useState(false);
+  const [selectedDealForEdit, setSelectedDealForEdit] = useState<any>(null);
 
   // Goal state
   const currentYearMonth = new Date().toISOString().slice(0, 7);
@@ -461,16 +465,14 @@ export default function SponsorshipsPage() {
                           <td className="p-3 text-right">
                             <Button
                               size="sm"
-                              variant="ghost"
-                              className="text-xs text-muted-foreground hover:text-foreground"
+                              variant="outline"
+                              className="text-xs text-indigo-600 border-indigo-500/30 hover:bg-indigo-50 dark:hover:bg-indigo-950 font-semibold"
                               onClick={() => {
-                                const newAmount = prompt("Nuevo monto ($):", d.agreedAmount);
-                                if (newAmount !== null) {
-                                  updateDealMutation.mutate({ id: d.id, data: { agreedAmount: Number(newAmount) || 0 } });
-                                }
+                                setSelectedDealForEdit(d);
+                                setIsEditDealOpen(true);
                               }}
                             >
-                              Editar
+                              Editar Todo
                             </Button>
                           </td>
                         </tr>
@@ -703,6 +705,12 @@ export default function SponsorshipsPage() {
         open={isBarterModalOpen}
         onOpenChange={setIsBarterModalOpen}
         product={selectedBarterProduct}
+      />
+
+      <EditDealModal
+        open={isEditDealOpen}
+        onOpenChange={setIsEditDealOpen}
+        deal={selectedDealForEdit}
       />
     </div>
   );

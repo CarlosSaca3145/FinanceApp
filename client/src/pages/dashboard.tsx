@@ -2,18 +2,21 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Building, Mail, TrendingUp, Megaphone, ArrowUp, ArrowDown, PlaneTakeoff, Eye, RefreshCw, Calendar, Send, Sparkles } from "lucide-react";
+import { Building, Mail, TrendingUp, Megaphone, ArrowUp, ArrowDown, PlaneTakeoff, Eye, RefreshCw, Calendar, Send, Sparkles, DollarSign } from "lucide-react";
 import { getDashboardStats } from "@/lib/api";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { NotionVideosModal } from "@/components/modals/notion-videos-modal";
+import { MarkVideoSoldModal } from "@/components/modals/mark-video-sold-modal";
 
 export function Dashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showNotionModal, setShowNotionModal] = useState(false);
+  const [isMarkSoldOpen, setIsMarkSoldOpen] = useState(false);
+  const [selectedVideoForSale, setSelectedVideoForSale] = useState<any>(null);
 
   const { data: notionVideos = [] } = useQuery<any[]>({
     queryKey: ["/api/integrations/notion/videos"],
@@ -297,17 +300,32 @@ export function Dashboard() {
                         {isSold ? (
                           <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">🤝 VENDIDO</span>
                         ) : (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 text-[11px] px-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
-                            onClick={() => {
-                              sessionStorage.setItem("selectedNotionVideo", JSON.stringify(vid));
-                              setLocation("/brands");
-                            }}
-                          >
-                            <Send className="h-3 w-3 mr-1" /> Ofrecer
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 text-[10px] px-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                              onClick={() => {
+                                sessionStorage.setItem("selectedNotionVideo", JSON.stringify(vid));
+                                setLocation("/brands");
+                              }}
+                              title="Ofrecer a Marca por Email"
+                            >
+                              <Send className="h-3 w-3 mr-0.5" /> Ofrecer
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 text-[10px] px-1.5 text-emerald-600 border-emerald-500/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-semibold"
+                              onClick={() => {
+                                setSelectedVideoForSale(vid);
+                                setIsMarkSoldOpen(true);
+                              }}
+                              title="Marcar Vídeo como Vendido"
+                            >
+                              <DollarSign className="h-3 w-3 mr-0.5" /> Vendido
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -402,6 +420,13 @@ export function Dashboard() {
       <NotionVideosModal 
         open={showNotionModal} 
         onOpenChange={setShowNotionModal} 
+      />
+
+      {/* Mark Video Sold Modal */}
+      <MarkVideoSoldModal
+        open={isMarkSoldOpen}
+        onOpenChange={setIsMarkSoldOpen}
+        video={selectedVideoForSale}
       />
     </div>
   );

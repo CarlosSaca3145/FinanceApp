@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
-import { Calendar, Search, ExternalLink, Send, Tag, SlidersHorizontal } from "lucide-react";
+import { Calendar, Search, ExternalLink, Send, Tag, SlidersHorizontal, DollarSign } from "lucide-react";
 import { useLocation } from "wouter";
+import { MarkVideoSoldModal } from "./mark-video-sold-modal";
 
 export interface NotionVideo {
   id?: string;
@@ -32,6 +33,9 @@ export function NotionVideosModal({ open, onOpenChange, onSelectVideoForBrand }:
   const [selectedNiche, setSelectedNiche] = useState<string>("all");
   const [pipelineTab, setPipelineTab] = useState<"disponibles" | "vendidos" | "todos">("disponibles");
   const [sortBy, setSortBy] = useState<"date" | "title">("date");
+
+  const [isMarkSoldOpen, setIsMarkSoldOpen] = useState(false);
+  const [selectedVideoForSale, setSelectedVideoForSale] = useState<NotionVideo | null>(null);
 
   const { data: videos = [], isLoading } = useQuery<NotionVideo[]>({
     queryKey: ["/api/integrations/notion/videos"],
@@ -252,14 +256,28 @@ export function NotionVideosModal({ open, onOpenChange, onSelectVideoForBrand }:
                             🤝 VENDIDO
                           </Badge>
                         ) : (
-                          <Button
-                            size="sm"
-                            className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white gap-1 px-3 shadow-xs"
-                            onClick={() => handleOfferToBrand(video)}
-                          >
-                            <Send className="h-3 w-3" />
-                            Ofrecer a Marca
-                          </Button>
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              size="sm"
+                              className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white gap-1 px-2.5 shadow-xs"
+                              onClick={() => handleOfferToBrand(video)}
+                            >
+                              <Send className="h-3 w-3" />
+                              Ofrecer
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-xs text-emerald-600 border-emerald-500/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-semibold gap-1 px-2.5"
+                              onClick={() => {
+                                setSelectedVideoForSale(video);
+                                setIsMarkSoldOpen(true);
+                              }}
+                            >
+                              <DollarSign className="h-3 w-3" />
+                              Vendido
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -269,6 +287,12 @@ export function NotionVideosModal({ open, onOpenChange, onSelectVideoForBrand }:
             </div>
           )}
         </div>
+
+        <MarkVideoSoldModal
+          open={isMarkSoldOpen}
+          onOpenChange={setIsMarkSoldOpen}
+          video={selectedVideoForSale}
+        />
       </DialogContent>
     </Dialog>
   );
