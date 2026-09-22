@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,34 @@ interface MarkVideoSoldModalProps {
   } | null;
 }
 
+function formatToYYYYMMDD(dateInput: any): string {
+  if (!dateInput) return "";
+  try {
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return "";
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  } catch {
+    return "";
+  }
+}
+
+function formatDateDMY(dateInput: any): string {
+  if (!dateInput) return "";
+  try {
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return "";
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch {
+    return "";
+  }
+}
+
 export function MarkVideoSoldModal({ open, onOpenChange, video }: MarkVideoSoldModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -30,9 +58,7 @@ export function MarkVideoSoldModal({ open, onOpenChange, video }: MarkVideoSoldM
   const [brandName, setBrandName] = useState("");
   const [selectedBrandId, setSelectedBrandId] = useState<string>("custom");
   const [agreedAmount, setAgreedAmount] = useState<string>("500");
-  const [deliveryDate, setDeliveryDate] = useState<string>(
-    video?.targetDate ? new Date(video.targetDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
-  );
+  const [deliveryDate, setDeliveryDate] = useState<string>("");
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "paid">("pending");
   const [paymentDate, setPaymentDate] = useState<string>("");
   const [assignedTo, setAssignedTo] = useState("Carlos");
@@ -43,6 +69,16 @@ export function MarkVideoSoldModal({ open, onOpenChange, video }: MarkVideoSoldM
     queryKey: ["/api/brands"],
     enabled: open,
   });
+
+  useEffect(() => {
+    if (open && video) {
+      if (video.targetDate) {
+        setDeliveryDate(formatToYYYYMMDD(video.targetDate));
+      } else {
+        setDeliveryDate(formatToYYYYMMDD(new Date()));
+      }
+    }
+  }, [open, video]);
 
   const availableDeliverables = [
     "Integración 60-90s (Horizontal)",
@@ -173,13 +209,18 @@ export function MarkVideoSoldModal({ open, onOpenChange, video }: MarkVideoSoldM
             </div>
 
             <div>
-              <Label className="text-xs font-semibold">📅 Fecha Limite de Entrega</Label>
+              <Label className="text-xs font-semibold">📅 Fecha Límite de Entrega</Label>
               <Input
                 type="date"
                 value={deliveryDate}
                 onChange={(e) => setDeliveryDate(e.target.value)}
                 className="text-xs mt-1"
               />
+              {deliveryDate && (
+                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold mt-1 block">
+                  Día/Mes/Año: {formatDateDMY(deliveryDate)}
+                </span>
+              )}
             </div>
           </div>
 
@@ -206,6 +247,11 @@ export function MarkVideoSoldModal({ open, onOpenChange, video }: MarkVideoSoldM
                 onChange={(e) => setPaymentDate(e.target.value)}
                 className="text-xs mt-1"
               />
+              {paymentDate && (
+                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold mt-1 block">
+                  Día/Mes/Año: {formatDateDMY(paymentDate)}
+                </span>
+              )}
             </div>
           </div>
 
