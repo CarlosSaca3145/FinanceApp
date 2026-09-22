@@ -59,11 +59,12 @@ export async function sendEmail(params: EmailParams): Promise<{ success: boolean
         host: "smtp.gmail.com",
         port: 465,
         secure: true,
-        connectionTimeout: 20000, // 20s
-        greetingTimeout: 20000,
-        socketTimeout: 30000, // 30s
+        family: 4,
+        connectionTimeout: 8000, // 8s timeout to failover quickly
+        greetingTimeout: 8000,
+        socketTimeout: 12000,
         auth: { user: emailUser, pass: cleanPass },
-        tls: { rejectUnauthorized: false },
+        tls: { rejectUnauthorized: false, servername: "smtp.gmail.com" },
       },
       {
         loggingName: "Port 587 (TLS)",
@@ -71,20 +72,22 @@ export async function sendEmail(params: EmailParams): Promise<{ success: boolean
         port: 587,
         secure: false,
         requireTLS: true,
-        connectionTimeout: 20000,
-        greetingTimeout: 20000,
-        socketTimeout: 30000,
+        family: 4,
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 12000,
         auth: { user: emailUser, pass: cleanPass },
-        tls: { rejectUnauthorized: false },
+        tls: { rejectUnauthorized: false, servername: "smtp.gmail.com" },
       },
       {
         loggingName: "Gmail Service (Fallback)",
         service: "gmail",
-        connectionTimeout: 20000,
-        greetingTimeout: 20000,
-        socketTimeout: 30000,
+        family: 4,
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 12000,
         auth: { user: emailUser, pass: cleanPass },
-        tls: { rejectUnauthorized: false },
+        tls: { rejectUnauthorized: false, servername: "smtp.gmail.com" },
       }
     ];
 

@@ -643,8 +643,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         res.json({ success: true, message: `Email sent to ${brand.contacto || recipient}` });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to send email" });
+    } catch (error: any) {
+      console.error("[POST /api/send-email ERROR]:", error);
+      res.status(500).json({ error: error?.message || "Failed to send email" });
     }
   });
 
