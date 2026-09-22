@@ -201,18 +201,38 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
     const campaign = brand.campania && brand.campania.toLowerCase() !== "general" ? brand.campania : null;
     const formattedViews = activeYoutubeMatch?.formattedViews || "decenas de miles de";
 
-    if (emailLanguage === "en") {
-      const videoItems = selectedVideos.map((v) => {
-        return `• 🎬 "${v.title}"\n  (This video achieved high reach with ${formattedViews} views, so we project this upcoming video on a similar topic will achieve comparable or even higher reach).`;
-      }).join("\n\n");
+    const buildVideoItems = (lang: string) => {
+      if (!selectedVideos.length) {
+        return lang === "en" ? '• 🎬 "High-Impact YouTube Video Integration"' :
+               lang === "pt" ? '• 🎬 "Integração em Vídeo do YouTube de Alto Impacto"' :
+               lang === "de" ? '• 🎬 "Hochwirksame YouTube-Video-Integration"' :
+               '• 🎬 "Integración en Video de YouTube de Alto Impacto"';
+      }
 
+      return selectedVideos.map((v) => {
+        const urlLink = v.notionUrl || (selectedVideoLink ? selectedVideoLink : null);
+        const urlText = urlLink ? `\n  🔗 Link: ${urlLink}` : "";
+
+        if (lang === "en") {
+          return `• 🎬 "${v.title}"${urlText}\n  (This video achieved high reach with ${formattedViews} views; we project this upcoming video on a similar topic will achieve comparable or even higher reach).`;
+        } else if (lang === "pt") {
+          return `• 🎬 "${v.title}"${urlText}\n  (Este vídeo alcançou um alto alcance com ${formattedViews} visualizações, portanto prevemos que este próximo vídeo de tema semelhante terá alcance igual ou superior).`;
+        } else if (lang === "de") {
+          return `• 🎬 "${v.title}"${urlText}\n  (Dieses Video erzielte eine hohe Reichweite von ${formattedViews} Aufrufen. Wir gehen davon aus, dass dieses bevorstehende Video zu einem ähnlichen Thema eine vergleichbare oder höhere Reichweite erzielen wird).`;
+        } else {
+          return `• 🎬 "${v.title}"${urlText}\n  (Este video tuvo un alto alcance de ${formattedViews} visualizaciones, por lo que entendemos que este que estoy ofreciéndote de temática similar tendrá igual o similar alcance con potencial a ser mayor).`;
+        }
+      }).join("\n\n");
+    };
+
+    if (emailLanguage === "en") {
       return `Hi ${contactName},
 
-${campaign ? `Regarding your "${campaign}" campaign` : "Regarding our upcoming sponsorship campaign"}, I am offering a high-impact integration in long-form YouTube content.
+${campaign ? `Regarding your "${campaign}" campaign` : "Regarding our upcoming sponsorship opportunity"}, I am offering a high-impact integration in long-form YouTube content.
 
 ${selectedVideos.length > 1 ? "The videos currently available for sponsorship are:" : "The video currently available for sponsorship is:"}
 
-${videoItems || `• 🎬 "Upcoming High-Impact YouTube Video"`}
+${buildVideoItems("en")}
 
 ${selectedVideoLink ? `Here is an example from a previous integration:\n🔗 ${selectedVideoLink}\n\n` : ""}Would you be open to a quick call or email exchange to coordinate details?
 
@@ -221,18 +241,46 @@ Carlos Saca
 Saca Tech | @saca.technology`;
     }
 
-    // Default Spanish
-    const videoItems = selectedVideos.map((v) => {
-      return `• 🎬 "${v.title}"\n  (Este video tuvo un alto alcance de ${formattedViews} visualizaciones, por lo que entendemos que este que estoy ofreciéndote de temática similar tendrá igual o similar alcance con potencial a ser mayor).`;
-    }).join("\n\n");
+    if (emailLanguage === "pt") {
+      return `Olá ${contactName},
 
+${campaign ? `Em relação à sua campanha "${campaign}"` : "Em relação à nossa próxima oportunidade de patrocínio"}, estou oferecendo uma integração em vídeo longo no YouTube de alto impacto.
+
+${selectedVideos.length > 1 ? "Os vídeos disponíveis para patrocínio são:" : "O vídeo disponível para patrocínio é:"}
+
+${buildVideoItems("pt")}
+
+${selectedVideoLink ? `Você pode ver um exemplo de integração anterior aqui:\n🔗 ${selectedVideoLink}\n\n` : ""}Você estaria disponível para uma rápida ligação ou troca de e-mails para alinhar os detalhes?
+
+Atenciosamente,
+Carlos Saca
+Saca Tech | @saca.technology`;
+    }
+
+    if (emailLanguage === "de") {
+      return `Hallo ${contactName},
+
+${campaign ? `Bezüglich Ihrer Kampagne "${campaign}"` : "Bezüglich unserer bevorstehenden Sponsoring-Möglichkeit"}, biete ich eine hochwirksame Integration in Long-Form-YouTube-Inhalten an.
+
+${selectedVideos.length > 1 ? "Die derzeit für ein Sponsoring verfügbaren Videos sind:" : "Das derzeit für ein Sponsoring verfügbare Video ist:"}
+
+${buildVideoItems("de")}
+
+${selectedVideoLink ? `Hier ist ein Beispiel einer früheren Integration:\n🔗 ${selectedVideoLink}\n\n` : ""}Wären Sie für ein kurzes Telefonat oder einen E-Mail-Austausch offen, um die Details abzustimmen?
+
+Mit freundlichen Grüßen,
+Carlos Saca
+Saca Tech | @saca.technology`;
+    }
+
+    // Default Spanish
     return `Hola ${contactName},
 
 ${campaign ? `Respecto a la campaña "${campaign}"` : "Respecto a la campaña"}, estoy ofreciendo una integración en un video de YouTube largo de alto impacto.
 
 ${selectedVideos.length > 1 ? "Los videos que están disponibles son:" : "El video que está disponible es:"}
 
-${videoItems || `• 🎬 "Video de alto impacto de YouTube"`}
+${buildVideoItems("es")}
 
 ${selectedVideoLink ? `Puedes ver un ejemplo de una integración anterior aquí:\n🔗 ${selectedVideoLink}\n\n` : ""}Quedo a la espera de saber si estarías disponible para una breve llamada o responder por este medio para coordinar detalles.
 

@@ -482,7 +482,8 @@ Respond ONLY as JSON:
       ? videos.map((v, i) => `- "${v.title}"${v.views ? ` (${typeof v.views === 'number' ? v.views.toLocaleString() : v.views} views${v.url ? `: ${v.url}` : ''})` : ''}`).join('\n')
       : 'General high-impact long-form video';
 
-    const prompt = `You are Carlos Saca, creator at Saca Tech (@saca.technology).
+    try {
+      const prompt = `You are Carlos Saca, creator at Saca Tech (@saca.technology).
 Write a professional sponsorship pitch email to a brand.
 
 Language: Write the ENTIRE email in ${langName}.
@@ -498,7 +499,7 @@ ${referenceVideoLink ? `- Reference past work link: ${referenceVideoLink}` : ''}
 
 Key messaging requirements:
 1. State clearly: "Hola [Name/Team]. Respecto a la campaña [Campaign], estoy ofreciendo una integración en un video de YouTube largo de alto impacto."
-2. Present the available video(s).
+2. Present the available video(s) clearly including any reference URLs.
 3. For each video offered, frame the social proof: "Este video tuvo un alto alcance de [XXX] visualizaciones, por lo que entendemos que este que estoy ofreciéndote de temática similar tendrá igual o similar alcance con potencial a ser mayor."
 4. Include a clear call-to-action asking if they are open to a quick call or email exchange.
 
@@ -508,24 +509,62 @@ Respond strictly in JSON format:
   "body": "Full plain text email body in ${langName} with double newlines between paragraphs"
 }`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-5",
-      messages: [
-        {
-          role: "system",
-          content: `You are a professional creator partnership manager. Return plain text email content with double newlines in valid JSON format. Always write in ${langName}.`,
-        },
-        { role: "user", content: prompt },
-      ],
-      response_format: { type: "json_object" },
-      max_completion_tokens: 1200,
-    });
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You are a professional creator partnership manager. Return plain text email content with double newlines in valid JSON format. Always write in ${langName}.`,
+          },
+          { role: "user", content: prompt },
+        ],
+        response_format: { type: "json_object" },
+        max_completion_tokens: 1200,
+      });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
-    return {
-      subject: result.subject || `Propuesta de Colaboración — ${brandName}`,
-      body: result.body || `Hola ${contactName || brandName},\n\nRespecto a la campaña de ${brandName}...`,
-    };
+      const result = JSON.parse(response.choices[0].message.content || "{}");
+      if (result.body && result.subject) {
+        return { subject: result.subject, body: result.body };
+      }
+    } catch (error) {
+      console.warn("[OpenAI generateSmartEmail Fallback]:", (error as Error).message);
+    }
+
+    // Fallback template builder if OpenAI call fails or is unavailable
+    const salutation = language === 'en' ? `Hi ${contactName || brandName},` :
+                       language === 'pt' ? `Olá ${contactName || brandName},` :
+                       language === 'de' ? `Hallo ${contactName || brandName},` :
+                       `Hola ${contactName || brandName},`;
+
+    const campaignText = campaign ? (
+      language === 'en' ? `Regarding your "${campaign}" campaign` :
+      language === 'pt' ? `Em relação à sua campanha "${campaign}"` :
+      language === 'de' ? `Bezüglich Ihrer Kampagne "${campaign}"` :
+      `Respecto a la campaña "${campaign}"`
+    ) : (
+      language === 'en' ? `Regarding an upcoming sponsorship opportunity` :
+      language === 'pt' ? `Em relação a uma oportunidade de patrocínio` :
+      language === 'de' ? `Bezüglich einer bevorstehenden Sponsoring-Möglichkeit` :
+      `Respecto a la campaña de integración`
+    );
+
+    const videoListFormatted = videos.length > 0
+      ? videos.map(v => {
+          const viewsStr = v.views ? ` (${typeof v.views === 'number' ? v.views.toLocaleString() : v.views} views)` : '';
+          const urlStr = v.url ? `\n  Link: ${v.url}` : '';
+          return `• 🎬 "${v.title}"${viewsStr}${urlStr}\n  (${language === 'en' ? 'This video achieved high reach; we project this upcoming video on a similar topic will achieve equal or higher reach.' : 'Este vídeo tuvo un alto alcance de visualizaciones, por lo que entendemos que este que estoy ofreciéndote de temática similar tendrá igual o similar alcance con potencial a ser mayor.'})`;
+        }).join('\n\n')
+      : `• 🎬 "YouTube Long-Form Integration"`;
+
+    const cta = language === 'en' ? 'Would you be open to a quick call or email exchange to coordinate details?' :
+                language === 'pt' ? 'Você estaria disponível para uma rápida ligação ou troca de e-mails para alinhar os detalhes?' :
+                language === 'de' ? 'Wären Sie für un kurzes Telefonat oder einen E-Mail-Austausch offen, um die Details abzustimmen?' :
+                'Quedo a la espera de saber si estarías disponible para una breve llamada o responder por este medio para coordinar detalles.';
+
+    const body = `${salutation}\n\n${campaignText}, ${language === 'en' ? 'I am offering an integration in a long-form YouTube video.' : 'estoy ofreciendo una integración en un video de YouTube largo de alto impacto.'}\n\n${language === 'en' ? 'The available videos are:' : 'Los vídeos que están disponibles son:'}\n\n${videoListFormatted}\n\n${referenceVideoLink ? `${language === 'en' ? 'Reference video:' : 'Vídeo de referencia:'} ${referenceVideoLink}\n\n` : ''}${cta}\n\n${language === 'en' ? 'Best regards,' : 'Saludos cordiales,'}\nCarlos Saca\nSaca Tech | @saca.technology`;
+
+    const subject = language === 'en' ? `Sponsorship Proposal — ${brandName}` : `Propuesta de Patrocinio — ${brandName}`;
+    return { subject, body };
   }
 
   /**
@@ -540,7 +579,8 @@ Respond strictly in JSON format:
     const { currentBody, instruction, brandName, language = 'es' } = opts;
     const langName = language === 'en' ? 'English' : language === 'pt' ? 'Portuguese' : language === 'de' ? 'German' : 'Spanish';
 
-    const prompt = `You are an expert email editor for YouTube creator sponsorship proposals.
+    try {
+      const prompt = `You are an expert email editor for YouTube creator sponsorship proposals.
 Rewrite/refine the following email draft according to the user's specific instruction.
 
 Language requirement: Write the refined email ENTIRELY in ${langName}.
@@ -554,7 +594,7 @@ ${currentBody}
 """
 
 Guidelines:
-1. Apply the user's requested changes faithfully (e.g. change tone, shorten/lengtain, emphasize specific points, fix wording, translate).
+1. Apply the user's requested changes faithfully (e.g. change tone, shorten/lengthen, emphasize specific points, fix wording, translate).
 2. Maintain professional, high-converting creator sponsorship pitch formatting with proper salutation, paragraph breaks, and signature.
 3. Return ONLY JSON with key "refinedBody".
 
@@ -563,20 +603,37 @@ Respond in JSON format:
   "refinedBody": "The updated email body text"
 }`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-5",
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert email editor. Return valid JSON. Always write in ${langName}.`,
-        },
-        { role: "user", content: prompt },
-      ],
-      response_format: { type: "json_object" },
-      max_completion_tokens: 1500,
-    });
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert email editor. Return valid JSON. Always write in ${langName}.`,
+          },
+          { role: "user", content: prompt },
+        ],
+        response_format: { type: "json_object" },
+        max_completion_tokens: 1500,
+      });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
-    return result.refinedBody || currentBody;
+      const result = JSON.parse(response.choices[0].message.content || "{}");
+      if (result.refinedBody) {
+        return result.refinedBody;
+      }
+    } catch (error) {
+      console.warn("[OpenAI refineEmailWithAI Fallback]:", (error as Error).message);
+    }
+
+    // Smart fallback if AI call fails or key is missing
+    let updated = currentBody;
+    const instLower = instruction.toLowerCase();
+
+    if (instLower.includes("corto") || instLower.includes("short") || instLower.includes("breve")) {
+      updated = updated.replace(/Quedo a la espera de saber si estarías disponible para una breve llamada o responder por este medio para coordinar detalles\./gi, "¿Estarías disponible para una breve llamada esta semana?");
+    } else if (instLower.includes("urgencia") || instLower.includes("urgente")) {
+      updated += "\n\nNota: La fecha de producción cierra esta semana, por lo que agradezco tu pronta confirmación.";
+    }
+
+    return updated;
   }
 }
