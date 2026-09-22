@@ -143,36 +143,52 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
     enabled: open,
   });
 
-  // Helper to resolve YouTube URL and view metrics for a video title (NEVER NOTION)
+  // Helper to resolve YouTube URL and view metrics for a specific video title (NEVER REUSE ACROSS DIFFERENT TITLES)
   const getYoutubeProofForVideo = (videoTitle: string) => {
-    if (!videoTitle) return { url: null, views: "alto alcance de" };
+    if (!videoTitle) return { url: null, views: null };
     const titleLower = videoTitle.toLowerCase();
+    const titleWords = titleLower.split(/\s+/).filter(w => w.length >= 3 && !["vs.", "pro", "max", "the", "del", "con", "para"].includes(w));
 
-    // 1. Try exact or partial match in YouTube db videos
-    const match = youtubeVideos.find((yt: any) =>
-      yt.title.toLowerCase().includes(titleLower) || titleLower.includes(yt.title.toLowerCase())
-    );
-    if (match) {
-      const url = match.url || (match.youtubeId ? `https://www.youtube.com/watch?v=${match.youtubeId}` : null);
-      const views = match.viewCount 
-        ? (match.viewCount >= 1_000_000 ? `${(match.viewCount / 1_000_000).toFixed(1)}M` : `${Math.round(match.viewCount / 1000)}K`)
-        : "alto alcance de";
+    // Search youtubeVideos specifically for THIS video title
+    let bestMatch: any = null;
+    let bestScore = 0;
+
+    for (const yt of youtubeVideos) {
+      const ytLower = (yt.title || "").toLowerCase();
+      
+      if (ytLower.includes(titleLower) || titleLower.includes(ytLower)) {
+        bestMatch = yt;
+        bestScore = 100;
+        break;
+      }
+
+      let score = 0;
+      for (const w of titleWords) {
+        if (ytLower.includes(w)) score += 1;
+      }
+
+      if (score > bestScore && score >= 2) {
+        bestScore = score;
+        bestMatch = yt;
+      }
+    }
+
+    if (bestMatch) {
+      const url = bestMatch.url || (bestMatch.youtubeId ? `https://www.youtube.com/watch?v=${bestMatch.youtubeId}` : null);
+      const views = bestMatch.viewCount 
+        ? (bestMatch.viewCount >= 1_000_000 ? `${(bestMatch.viewCount / 1_000_000).toFixed(1)}M` : `${Math.round(bestMatch.viewCount / 1000)}K`)
+        : null;
       return { url, views };
     }
 
-    // 2. Try activeYoutubeMatch
-    if (activeYoutubeMatch) {
+    // Only use activeYoutubeMatch IF primaryVideo title matches THIS title
+    if (primaryVideo?.title && primaryVideo.title.toLowerCase() === titleLower && activeYoutubeMatch) {
       const url = activeYoutubeMatch.url || (activeYoutubeMatch.youtubeId ? `https://www.youtube.com/watch?v=${activeYoutubeMatch.youtubeId}` : null);
-      const views = activeYoutubeMatch.formattedViews || "alto alcance de";
+      const views = activeYoutubeMatch.formattedViews || null;
       return { url, views };
     }
 
-    // 3. Check if selectedVideoLink is a YouTube link
-    if (selectedVideoLink && /youtube\.com|youtu\.be/i.test(selectedVideoLink)) {
-      return { url: selectedVideoLink, views: "alto alcance de" };
-    }
-
-    return { url: null, views: "alto alcance de" };
+    return { url: null, views: null };
   };
 
   // ── Mutations ─────────────────────────────────────────────────────────
@@ -242,7 +258,6 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
     const contactName = brand.contacto || `${brand.marca}`;
     const brandName = brand.marca;
     const campaign = brand.campania && brand.campania.toLowerCase() !== "general" ? brand.campania : null;
-    const formattedViews = activeYoutubeMatch?.formattedViews || "decenas de miles de";
 
     const buildVideoItems = (lang: string) => {
       if (!selectedVideos.length) {
@@ -254,22 +269,23 @@ export function EmailComposerModal({ open, onOpenChange, brand }: EmailComposerM
 
       return selectedVideos.map((v) => {
         const proof = getYoutubeProofForVideo(v.title);
-        // Only use YouTube URLs, NEVER Notion page links
+        // Only use YouTube URLs specifically matched to THIS video, or reference video link
         const youtubeUrl = (proof.url && /youtube\.com|youtu\.be/i.test(proof.url)) 
           ? proof.url 
           : (selectedVideoLink && /youtube\.com|youtu\.be/i.test(selectedVideoLink) ? selectedVideoLink : null);
 
         const urlText = youtubeUrl ? `\n  🔗 Link: ${youtubeUrl}` : "";
-        const formattedViews = proof.views;
+        const formattedViewsText = proof.views ? `de ${proof.views} visualizaciones` : "de alto alcance";
+        const formattedViewsEn = proof.views ? `with ${proof.views} views` : "high reach";
 
         if (lang === "en") {
-          return `• 🎬 "${v.title}"${urlText}\n  (This video achieved high reach with ${formattedViews} views; we project this upcoming video on a similar topic will achieve comparable or even higher reach).`;
+          return `• 🎬 "${v.title}"${urlText}\n  (This video achieved ${formattedViewsEn}; we project this upcoming video on a similar topic will achieve comparable or even higher reach).`;
         } else if (lang === "pt") {
-          return `• 🎬 "${v.title}"${urlText}\n  (Este vídeo alcançou um alto alcance com ${formattedViews} visualizações, portanto prevemos que este próximo vídeo de tema semelhante terá alcance igual ou superior).`;
+          return `• 🎬 "${v.title}"${urlText}\n  (Este vídeo alcançou um alto alcance ${proof.views ? `com ${proof.views} visualizações` : ''}, portanto prevemos que este próximo vídeo de tema semelhante terá alcance igual ou superior).`;
         } else if (lang === "de") {
-          return `• 🎬 "${v.title}"${urlText}\n  (Dieses Video erzielte eine hohe Reichweite von ${formattedViews} Aufrufen. Wir gehen davon aus, dass dieses bevorstehende Video zu einem ähnlichen Thema eine vergleichbare oder höhere Reichweite erzielen wird).`;
+          return `• 🎬 "${v.title}"${urlText}\n  (Dieses Video erzielte eine hohe Reichweite ${proof.views ? `von ${proof.views} Aufrufen` : ''}. Wir gehen davon aus, dass dieses bevorstehende Video zu einem ähnlichen Thema eine vergleichbare oder höhere Reichweite erzielen wird).`;
         } else {
-          return `• 🎬 "${v.title}"${urlText}\n  (Este video tuvo un alto alcance de ${formattedViews} visualizaciones, por lo que entendemos que este que estoy ofreciéndote de temática similar tendrá igual o similar alcance con potencial a ser mayor).`;
+          return `• 🎬 "${v.title}"${urlText}\n  (Este video tuvo un alto alcance ${formattedViewsText}, por lo que entendemos que este que estoy ofreciéndote de temática similar tendrá igual o similar alcance con potencial a ser mayor).`;
         }
       }).join("\n\n");
     };
